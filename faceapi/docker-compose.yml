@@ -1,0 +1,33 @@
+services:
+  faceapi:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: faceapi
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_ENV=development
+      - DEBUG=true
+      - HOST=0.0.0.0
+      - PORT=5000
+      - INSIGHTFACE_MODEL=buffalo_l
+      - DET_SIZE=640
+      - MAX_FACES=50
+      - MIN_CONFIDENCE=0.5
+      - USE_GPU=false
+      - PYTHONUNBUFFERED=1
+    volumes:
+      # Mount models directory for caching
+      - faceapi_models:/root/.insightface
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:5000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  faceapi_models:
+    name: faceapi_models

@@ -1,0 +1,64 @@
+# ================================
+# KU Directory - Root .gitignore
+# ================================
+
+# Environment files (contains secrets)
+.env
+.env.local
+.env.*.local
+*.env
+
+# ----- Go (gofiber) -----
+gofiber/.env
+gofiber/tmp/
+gofiber/logs/*.log
+gofiber/*.exe
+gofiber/*.dll
+gofiber/*.so
+gofiber/*.dylib
+
+# ----- Node (vite) -----
+vite/node_modules/
+vite/dist/
+vite/.env
+
+# ----- Python (faceapi) -----
+faceapi/.env
+faceapi/__pycache__/
+faceapi/**/__pycache__/
+faceapi/*.pyc
+faceapi/venv/
+faceapi/.venv/
+faceapi/models/
+faceapi/*.onnx
+
+# ----- IDE -----
+.vscode/
+.idea/
+*.swp
+*.swo
+*.sublime-*
+
+# ----- OS -----
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# ----- Logs -----
+*.log
+logs/
+
+# ----- Docker -----
+docker-compose.override.yml
+
+# ----- Misc -----
+*.tmp
+*.temp
+*.bak
+*.cache
+
+# Windows special files
+nul
+NUL
+gofiber/nul

@@ -1,0 +1,1956 @@
+{
+	"info": {
+		"_postman_id": "12345678-1234-1234-1234-123456789012",
+		"name": "_GoFiber Starter API",
+		"description": "Complete API testing suite for GoFiber Starter Project\n\n## Features\n- Authentication & Authorization\n- User Management\n- Task Management\n- **Enhanced File Upload & Management** with flexible path support\n- Job Scheduling\n- Comprehensive Error Testing\n\n## File Upload Enhancements (v1.1.0)\n- **Structured Path Uploads**: Organized folder structure using category/entity_id/file_type\n- **Custom Path Uploads**: Specify exact upload paths for flexibility\n- **Security Validation**: Comprehensive path validation and sanitization\n- **Multiple Test Scenarios**: Various upload approaches with validation\n\n## Authentication\nThis API uses JWT tokens for authentication. Get a token from the login endpoint and it will be automatically set for subsequent requests.\n\n## Environment Variables\nMake sure to import the environment file and select the appropriate environment (Development, Staging, or Production).",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "12345678"
+	},
+	"item": [
+		{
+			"name": "🔐 Authentication",
+			"item": [
+				{
+					"name": "Register User",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Response has success field', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('success');",
+									"    pm.expect(jsonData.success).to.be.true;",
+									"});",
+									"",
+									"pm.test('Response contains user data', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.data).to.have.property('id');",
+									"    pm.expect(jsonData.data).to.have.property('email');",
+									"    pm.expect(jsonData.data).to.have.property('username');",
+									"    pm.expect(jsonData.data).to.not.have.property('password');",
+									"});",
+									"",
+									"pm.test('User ID is valid UUID', function () {",
+									"    var jsonData = pm.response.json();",
+									"    var uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;",
+									"    pm.expect(jsonData.data.id).to.match(uuidRegex);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"{{test_email}}\",\n    \"username\": \"{{test_username}}\",\n    \"password\": \"{{test_password}}\",\n    \"firstName\": \"{{test_first_name}}\",\n    \"lastName\": \"{{test_last_name}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/register",
+							"host": ["{{base_url}}"],
+							"path": [ "auth", "register"]
+						},
+						"description": "Register a new user account with email, username, password, and personal information.\n\n**Validation Rules:**\n- Email: must be valid email format\n- Username: 3-20 characters, alphanumeric only\n- Password: minimum 8 characters\n- First/Last Name: required, 1-50 characters"
+					},
+					"response": []
+				},
+				{
+					"name": "Login User",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Response has success field', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('success');",
+									"    pm.expect(jsonData.success).to.be.true;",
+									"});",
+									"",
+									"pm.test('Response contains token and user data', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.data).to.have.property('token');",
+									"    pm.expect(jsonData.data).to.have.property('user');",
+									"    pm.expect(jsonData.data.user).to.have.property('id');",
+									"    pm.expect(jsonData.data.user).to.have.property('email');",
+									"    pm.expect(jsonData.data.user).to.not.have.property('password');",
+									"});",
+									"",
+									"pm.test('Token is not empty', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.data.token).to.not.be.empty;",
+									"});",
+									"",
+									"// Save token for subsequent requests",
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    pm.environment.set('auth_token', jsonData.data.token);",
+									"    pm.environment.set('user_id', jsonData.data.user.id);",
+									"    pm.environment.set('user_email', jsonData.data.user.email);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"{{test_email}}\",\n    \"password\": \"{{test_password}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/login",
+							"host": ["{{base_url}}"],
+							"path": [ "auth", "login"]
+						},
+						"description": "Authenticate user with email and password. Returns JWT token for subsequent API calls.\n\n**Response includes:**\n- JWT token (automatically saved to environment)\n- User profile information\n\n**Token Usage:**\nThe returned token is automatically saved and will be used in Authorization header for protected endpoints."
+					},
+					"response": []
+				},
+				{
+					"name": "Login - Invalid Credentials",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 401', function () {",
+									"    pm.response.to.have.status(401);",
+									"});",
+									"",
+									"pm.test('Response has error message', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('success');",
+									"    pm.expect(jsonData.success).to.be.false;",
+									"    pm.expect(jsonData).to.have.property('message');",
+									"    pm.expect(jsonData.message).to.include('Login failed');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"invalid@example.com\",\n    \"password\": \"wrongpassword\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/login",
+							"host": ["{{base_url}}"],
+							"path": [ "auth", "login"]
+						},
+						"description": "Test authentication with invalid credentials to verify error handling."
+					},
+					"response": []
+				}
+			],
+			"description": "Authentication endpoints for user registration and login.",
+			"event": [
+				{
+					"listen": "prerequest",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"// Set test data if not already set",
+							"if (!pm.environment.get('test_email')) {",
+							"    const timestamp = Date.now();",
+							"    pm.environment.set('test_email', `test${timestamp}@example.com`);",
+							"    pm.environment.set('test_username', `testuser${timestamp}`);",
+							"    pm.environment.set('test_password', 'testpassword123');",
+							"    pm.environment.set('test_first_name', 'Test');",
+							"    pm.environment.set('test_last_name', 'User');",
+							"}",
+							"",
+							"// Set file upload test variables",
+							"if (!pm.environment.get('test_custom_path')) {",
+							"    pm.environment.set('test_custom_path', 'test-uploads/documents');",
+							"    pm.environment.set('test_category', 'profiles');",
+							"    pm.environment.set('test_file_type', 'avatar');",
+							"    pm.environment.set('invalid_path', '../../../etc/passwd');",
+							"    pm.environment.set('malicious_path', '<script>alert(1)</script>');",
+							"}"
+						]
+					}
+				}
+			]
+		},
+		{
+			"name": "👤 Users",
+			"item": [
+				{
+					"name": "Get User Profile",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Response contains user profile', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.success).to.be.true;",
+									"    pm.expect(jsonData.data).to.have.property('id');",
+									"    pm.expect(jsonData.data).to.have.property('email');",
+									"    pm.expect(jsonData.data).to.have.property('username');",
+									"    pm.expect(jsonData.data).to.have.property('firstName');",
+									"    pm.expect(jsonData.data).to.have.property('lastName');",
+									"    pm.expect(jsonData.data).to.have.property('isActive');",
+									"    pm.expect(jsonData.data).to.not.have.property('password');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/users/profile",
+							"host": ["{{base_url}}"],
+							"path": [ "users", "profile"]
+						},
+						"description": "Get current user's profile information. Requires authentication."
+					},
+					"response": []
+				},
+				{
+					"name": "Update User Profile",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Profile updated successfully', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.success).to.be.true;",
+									"    pm.expect(jsonData.data.firstName).to.eql('Updated');",
+									"    pm.expect(jsonData.data.lastName).to.eql('Name');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"firstName\": \"Updated\",\n    \"lastName\": \"Name\",\n    \"avatar\": \"https://example.com/avatar.jpg\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/users/profile",
+							"host": ["{{base_url}}"],
+							"path": [ "users", "profile"]
+						},
+						"description": "Update current user's profile information. All fields are optional."
+					},
+					"response": []
+				},
+				{
+					"name": "List Users",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Response contains users list', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.success).to.be.true;",
+									"    pm.expect(jsonData.data).to.have.property('users');",
+									"    pm.expect(jsonData.data).to.have.property('meta');",
+									"    pm.expect(jsonData.data.meta).to.have.property('total');",
+									"    pm.expect(jsonData.data.meta).to.have.property('offset');",
+									"    pm.expect(jsonData.data.meta).to.have.property('limit');",
+									"});",
+									"",
+									"pm.test('Users array is valid', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.data.users).to.be.an('array');",
+									"    if (jsonData.data.users.length > 0) {",
+									"        pm.expect(jsonData.data.users[0]).to.have.property('id');",
+									"        pm.expect(jsonData.data.users[0]).to.have.property('email');",
+									"        pm.expect(jsonData.data.users[0]).to.not.have.property('password');",
+									"    }",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/users?limit=10&offset=0",
+							"host": ["{{base_url}}"],
+							"path": [ "users"],
+							"query": [
+								{
+									"key": "limit",
+									"value": "10"
+								},
+								{
+									"key": "offset",
+									"value": "0"
+								}
+							]
+						},
+						"description": "Get paginated list of users. Supports limit and offset parameters."
+					},
+					"response": []
+				},
+				{
+					"name": "Delete User Account",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('User deleted successfully', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.success).to.be.true;",
+									"    pm.expect(jsonData.message).to.include('deleted successfully');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/users/profile",
+							"host": ["{{base_url}}"],
+							"path": [ "users", "profile"]
+						},
+						"description": "Delete current user's account. This action is irreversible."
+					},
+					"response": []
+				}
+			],
+			"description": "User management endpoints for profile operations.",
+			"auth": {
+				"type": "bearer",
+				"bearer": [
+					{
+						"key": "token",
+						"value": "{{auth_token}}",
+						"type": "string"
+					}
+				]
+			}
+		},
+		{
+			"name": "📋 Tasks",
+			"item": [
+				{
+					"name": "Create Task",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Task created successfully', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.success).to.be.true;",
+									"    pm.expect(jsonData.data).to.have.property('id');",
+									"    pm.expect(jsonData.data).to.have.property('title');",
+									"    pm.expect(jsonData.data).to.have.property('description');",
+									"    pm.expect(jsonData.data).to.have.property('status');",
+									"    pm.expect(jsonData.data).to.have.property('priority');",
+									"    pm.expect(jsonData.data.status).to.eql('pending');",
+									"});",
+									"",
+									"// Save task ID for other requests",
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    pm.environment.set('task_id', jsonData.data.id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"title\": \"Sample Task\",\n    \"description\": \"This is a sample task for testing\",\n    \"priority\": 3,\n    \"dueDate\": \"2024-12-31T23:59:59Z\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/tasks",
+							"host": ["{{base_url}}"],
+							"path": [ "tasks"]
+						},
+						"description": "Create a new task.\n\n**Fields:**\n- title (required): Task title\n- description (optional): Task description\n- priority (optional): 1-5, defaults to 1\n- dueDate (optional): ISO 8601 datetime"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Task",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Task retrieved successfully', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.success).to.be.true;",
+									"    pm.expect(jsonData.data).to.have.property('id');",
+									"    pm.expect(jsonData.data).to.have.property('title');",
+									"    pm.expect(jsonData.data).to.have.property('user');",
+									"    pm.expect(jsonData.data.user).to.have.property('id');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/tasks/{{task_id}}",
+							"host": ["{{base_url}}"],
+							"path": [ "tasks", "{{task_id}}"]
+						},
+						"description": "Get a specific task by ID. Returns task details including associated user information."
+					},
+					"response": []
+				},
+				{
+					"name": "Update Task",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Task updated successfully', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.success).to.be.true;",
+									"    pm.expect(jsonData.data.title).to.eql('Updated Task Title');",
+									"    pm.expect(jsonData.data.status).to.eql('in_progress');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"title\": \"Updated Task Title\",\n    \"description\": \"Updated description\",\n    \"status\": \"in_progress\",\n    \"priority\": 5\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/tasks/{{task_id}}",
+							"host": ["{{base_url}}"],
+							"path": [ "tasks", "{{task_id}}"]
+						},
+						"description": "Update an existing task. All fields are optional.\n\n**Status Options:**\n- pending\n- in_progress\n- completed\n- cancelled"
+					},
+					"response": []
+				},
+				{
+					"name": "List User Tasks",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Tasks listed successfully', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.success).to.be.true;",
+									"    pm.expect(jsonData.data).to.have.property('tasks');",
+									"    pm.expect(jsonData.data).to.have.property('meta');",
+									"    pm.expect(jsonData.data.tasks).to.be.an('array');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/tasks/user?limit=10&offset=0",
+							"host": ["{{base_url}}"],
+							"path": [ "tasks", "user"],
+							"query": [
+								{
+									"key": "limit",
+									"value": "10"
+								},
+								{
+									"key": "offset",
+									"value": "0"
+								}
+							]
+						},
+						"description": "Get current user's tasks with pagination support."
+					},
+					"response": []
+				},
+				{
+					"name": "List All Tasks",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('All tasks listed successfully', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.success).to.be.true;",
+									"    pm.expect(jsonData.data).to.have.property('tasks');",
+									"    pm.expect(jsonData.data).to.have.property('meta');",
+									"    pm.expect(jsonData.data.tasks).to.be.an('array');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/tasks?limit=10&offset=0",
+							"host": ["{{base_url}}"],
+							"path": [ "tasks"],
+							"query": [
+								{
+									"key": "limit",
+									"value": "10"
+								},
+								{
+									"key": "offset",
+									"value": "0"
+								}
+							]
+						},
+						"description": "Get all tasks in the system with pagination support."
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Task",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Task deleted successfully', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.success).to.be.true;",
+									"    pm.expect(jsonData.message).to.include('deleted successfully');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/tasks/{{task_id}}",
+							"host": ["{{base_url}}"],
+							"path": [ "tasks", "{{task_id}}"]
+						},
+						"description": "Delete a specific task by ID."
+					},
+					"response": []
+				}
+			],
+			"description": "Task management endpoints for CRUD operations.",
+			"auth": {
+				"type": "bearer",
+				"bearer": [
+					{
+						"key": "token",
+						"value": "{{auth_token}}",
+						"type": "string"
+					}
+				]
+			}
+		},
+		{
+			"name": "📁 Files",
+			"item": [
+				{
+					"name": "Upload File - Structured Path",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('File uploaded successfully with structured path', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.success).to.be.true;",
+									"    pm.expect(jsonData.data).to.have.property('fileId');",
+									"    pm.expect(jsonData.data).to.have.property('fileName');",
+									"    pm.expect(jsonData.data).to.have.property('url');",
+									"    pm.expect(jsonData.data).to.have.property('cdnPath');",
+									"    pm.expect(jsonData.data).to.have.property('fileSize');",
+									"    pm.expect(jsonData.data).to.have.property('mimeType');",
+									"    pm.expect(jsonData.data).to.have.property('pathType');",
+									"    pm.expect(jsonData.data.pathType).to.eql('structured');",
+									"});",
+									"",
+									"pm.test('Structured path contains expected elements', function () {",
+									"    var jsonData = pm.response.json();",
+									"    var cdnPath = jsonData.data.cdnPath;",
+									"    pm.expect(cdnPath).to.include('uploads/');",
+									"    pm.expect(cdnPath).to.include('profiles/');",
+									"    pm.expect(cdnPath).to.include('avatar');",
+									"});",
+									"",
+									"// Save file ID for other requests",
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    pm.environment.set('file_id', jsonData.data.fileId);",
+									"    pm.environment.set('structured_file_id', jsonData.data.fileId);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "file",
+									"type": "file",
+									"src": "/path/to/test/avatar.jpg",
+									"description": "Select an image file for testing"
+								},
+								{
+									"key": "category",
+									"value": "profiles",
+									"description": "Category for organized file structure",
+									"type": "text"
+								},
+								{
+									"key": "entity_id",
+									"value": "{{user_id}}",
+									"description": "Entity ID (user ID in this case)",
+									"type": "text"
+								},
+								{
+									"key": "file_type",
+									"value": "avatar",
+									"description": "File type for categorization",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/files/upload",
+							"host": ["{{base_url}}"],
+							"path": [ "files", "upload"]
+						},
+						"description": "Upload a file using the **structured path approach**. This creates an organized folder structure based on category, entity ID, and file type.\n\n## Structured Path Approach\n\nThis approach creates organized paths like:\n`uploads/{user_id}/{category}/{entity_id}/{file_type}/{unique_filename}`\n\n**Form Data Fields:**\n- `file` (required): The file to upload - filename and mime type are automatically extracted\n- `category` (optional): Category for organization (e.g., 'profiles', 'documents', 'images')\n- `entity_id` (optional): Related entity UUID (e.g., user ID, project ID)\n- `file_type` (optional): File type/purpose (e.g., 'avatar', 'contract', 'thumbnail')\n\n**Example Path Generated:**\n`uploads/123e4567-e89b-12d3-a456-426614174000/profiles/123e4567-e89b-12d3-a456-426614174000/avatar/abc123-xyz.jpg`\n\n**Automatic Extraction:**\n- Filename is extracted from uploaded file\n- MIME type is detected from file headers\n- File size is calculated automatically\n- Unique filename is generated to prevent conflicts\n\n**Use Cases:**\n- User profile pictures\n- Project documents\n- Product images\n- Any scenario requiring organized file structure\n\n**Supported File Types:**\n- Images: JPG, PNG, GIF\n- Documents: PDF, DOC, DOCX, TXT\n- Archives: ZIP\n\n**Note:** Only the file and path parameters are needed - filename and MIME type are auto-detected."
+					},
+					"response": []
+				},
+				{
+					"name": "Upload File - Custom Path",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('File uploaded successfully with custom path', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.success).to.be.true;",
+									"    pm.expect(jsonData.data).to.have.property('fileId');",
+									"    pm.expect(jsonData.data).to.have.property('fileName');",
+									"    pm.expect(jsonData.data).to.have.property('url');",
+									"    pm.expect(jsonData.data).to.have.property('cdnPath');",
+									"    pm.expect(jsonData.data).to.have.property('fileSize');",
+									"    pm.expect(jsonData.data).to.have.property('mimeType');",
+									"    pm.expect(jsonData.data).to.have.property('pathType');",
+									"    pm.expect(jsonData.data.pathType).to.eql('custom');",
+									"});",
+									"",
+									"pm.test('Custom path is correctly applied', function () {",
+									"    var jsonData = pm.response.json();",
+									"    var cdnPath = jsonData.data.cdnPath;",
+									"    pm.expect(cdnPath).to.include('my-custom-folder/documents');",
+									"});",
+									"",
+									"// Save file ID for other requests",
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    pm.environment.set('custom_file_id', jsonData.data.fileId);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "file",
+									"type": "file",
+									"src": "/path/to/test/document.pdf",
+									"description": "Select a document file for testing"
+								},
+								{
+									"key": "custom_path",
+									"value": "my-custom-folder/documents",
+									"description": "Custom path for file storage",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/files/upload",
+							"host": ["{{base_url}}"],
+							"path": [ "files", "upload"]
+						},
+						"description": "Upload a file using the **custom path approach**. This allows you to specify exact folder structure for file storage.\n\n## Custom Path Approach\n\nThis approach allows you to specify the exact path where your file should be stored:\n`{custom_path}/{unique_filename}`\n\n**Form Data Fields:**\n- `file` (required): The file to upload - filename and mime type are automatically extracted\n- `custom_path` (required): Custom directory path for file storage\n\n**Example Path Generated:**\n`my-custom-folder/documents/abc123-xyz.pdf`\n\n**Automatic Extraction:**\n- Filename is extracted from uploaded file\n- MIME type is detected from file headers\n- File size is calculated automatically\n- Unique filename is generated to prevent conflicts\n\n**Path Validation & Security:**\n- No directory traversal (`../` patterns blocked)\n- No absolute paths (`/` or `C:\\` patterns blocked)\n- No dangerous characters (`<>:\"|?*` and control characters blocked)\n- No Windows reserved names (`CON`, `PRN`, `AUX`, etc.)\n- Maximum length: 500 characters\n- Path is automatically sanitized\n\n**Valid Custom Path Examples:**\n- `documents/contracts`\n- `images/thumbnails/2024`\n- `temp/uploads`\n- `user-content/galleries`\n\n**Invalid Custom Path Examples:**\n- `../../../etc/passwd` (directory traversal)\n- `/absolute/path` (absolute path)\n- `folder<script>` (dangerous characters)\n- `CON/file` (reserved name)\n\n**Use Cases:**\n- Legacy system compatibility\n- Specific folder structures\n- Temporary file storage\n- Custom organization requirements\n\n**Note:** Only file and custom_path are needed - other fields are auto-detected from the uploaded file."
+					},
+					"response": []
+				},
+				{
+					"name": "Upload File - Invalid Custom Path",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 400', function () {",
+									"    pm.response.to.have.status(400);",
+									"});",
+									"",
+									"pm.test('Invalid path is rejected', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.success).to.be.false;",
+									"    pm.expect(jsonData.message).to.include('File upload failed');",
+									"    pm.expect(jsonData.error).to.include('invalid custom path');",
+									"});",
+									"",
+									"pm.test('Security validation working', function () {",
+									"    var jsonData = pm.response.json();",
+									"    // Should contain security-related error message",
+									"    var errorMsg = jsonData.error.toLowerCase();",
+									"    pm.expect(errorMsg).to.satisfy(function(msg) {",
+									"        return msg.includes('unsafe') || msg.includes('invalid') || msg.includes('traversal');",
+									"    });",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "file",
+									"type": "file",
+									"src": "/path/to/test/malicious.txt",
+									"description": "Select any file for testing security validation"
+								},
+								{
+									"key": "custom_path",
+									"value": "../../../etc/passwd",
+									"description": "Invalid path with directory traversal attempt",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/files/upload",
+							"host": ["{{base_url}}"],
+							"path": [ "files", "upload"]
+						},
+						"description": "Test security validation by attempting to upload a file with an **invalid custom path**. This request should be rejected by the server.\n\n## Security Test\n\nThis test verifies that the API properly validates and rejects dangerous paths that could be used for:\n- Directory traversal attacks\n- Path injection\n- Access to system files\n\n**Expected Result:**\n- Status Code: 400 Bad Request\n- Error message indicating invalid path\n- File upload should fail\n\n**Security Features Tested:**\n- Directory traversal prevention (`../`)\n- Absolute path blocking\n- Dangerous character filtering\n- Path length validation\n\n**Note:** This is a security test - the upload should fail with a validation error."
+					},
+					"response": []
+				},
+				{
+					"name": "Upload File - Multiple Path Security Tests",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"// Set different test paths for security validation",
+									"const testPaths = [",
+									"    '../../../etc/passwd',      // Directory traversal",
+									"    '/absolute/path',           // Absolute path",
+									"    'folder<script>alert(1)</script>', // Script injection",
+									"    'CON/file.txt',            // Windows reserved name",
+									"    'a'.repeat(600),           // Path too long",
+									"    'folder|pipe'              // Pipe character",
+									"];",
+									"",
+									"// Select a random malicious path for this test",
+									"const randomPath = testPaths[Math.floor(Math.random() * testPaths.length)];",
+									"pm.environment.set('current_malicious_path', randomPath);",
+									"console.log('Testing malicious path:', randomPath);"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 400 (Bad Request)', function () {",
+									"    pm.response.to.have.status(400);",
+									"});",
+									"",
+									"pm.test('Malicious path is rejected', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.success).to.be.false;",
+									"    pm.expect(jsonData.message).to.include('File upload failed');",
+									"});",
+									"",
+									"pm.test('Security error message is appropriate', function () {",
+									"    var jsonData = pm.response.json();",
+									"    var errorMsg = jsonData.error.toLowerCase();",
+									"    // Check for security-related keywords",
+									"    var securityKeywords = ['invalid', 'unsafe', 'path', 'validation', 'security'];",
+									"    var hasSecurityKeyword = securityKeywords.some(keyword => errorMsg.includes(keyword));",
+									"    pm.expect(hasSecurityKeyword).to.be.true;",
+									"});",
+									"",
+									"pm.test('Response time is acceptable', function () {",
+									"    pm.expect(pm.response.responseTime).to.be.below(2000);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "file",
+									"type": "file",
+									"src": "/path/to/test/security-test.txt",
+									"description": "Any test file for security validation"
+								},
+								{
+									"key": "custom_path",
+									"value": "{{current_malicious_path}}",
+									"description": "Dynamically set malicious path for testing",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/files/upload",
+							"host": ["{{base_url}}"],
+							"path": [ "files", "upload"]
+						},
+						"description": "Comprehensive security testing for file upload paths. This test randomly selects different types of malicious paths to ensure robust security validation.\n\n## Security Test Coverage\n\n**Malicious Path Types Tested:**\n1. **Directory Traversal**: `../../../etc/passwd`\n2. **Absolute Paths**: `/absolute/path`\n3. **Script Injection**: `folder<script>alert(1)</script>`\n4. **Reserved Names**: `CON/file.txt` (Windows)\n5. **Path Length**: Extremely long paths (>500 chars)\n6. **Special Characters**: Pipes, quotes, etc.\n\n**Expected Behavior:**\n- All malicious paths should be rejected\n- Status Code: 400 Bad Request\n- Appropriate error messages\n- No server crashes or unexpected behavior\n\n**Security Features:**\n- Path sanitization\n- Length validation\n- Character filtering\n- Reserved name checking\n- Directory traversal prevention\n\n**Note:** This test uses dynamic path selection to cover multiple security scenarios."
+					},
+					"response": []
+				},
+				{
+					"name": "Upload File - Task Documents (Structured)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Task document uploaded successfully', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.success).to.be.true;",
+									"    pm.expect(jsonData.data.pathType).to.eql('structured');",
+									"});",
+									"",
+									"pm.test('Path contains task-related structure', function () {",
+									"    var jsonData = pm.response.json();",
+									"    var cdnPath = jsonData.data.cdnPath;",
+									"    pm.expect(cdnPath).to.include('uploads/');",
+									"    pm.expect(cdnPath).to.include('tasks/');",
+									"    pm.expect(cdnPath).to.include('documents');",
+									"});",
+									"",
+									"// Save for cleanup or further testing",
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    pm.environment.set('task_document_file_id', jsonData.data.fileId);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "file",
+									"type": "file",
+									"src": "/path/to/test/task-document.pdf",
+									"description": "Document file for task"
+								},
+								{
+									"key": "category",
+									"value": "tasks",
+									"description": "Task-related files",
+									"type": "text"
+								},
+								{
+									"key": "entity_id",
+									"value": "{{task_id}}",
+									"description": "Specific task ID",
+									"type": "text"
+								},
+								{
+									"key": "file_type",
+									"value": "documents",
+									"description": "Document type",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/files/upload",
+							"host": ["{{base_url}}"],
+							"path": [ "files", "upload"]
+						},
+						"description": "Upload a document related to a specific task using structured path approach.\n\n**Use Case:** Task Management Documents\n- Organized by task category\n- Associated with specific task ID\n- Categorized as documents\n\n**Generated Path:** `uploads/{user_id}/tasks/{task_id}/documents/{filename}`\n\n**Benefits:**\n- Easy to find all documents for a specific task\n- Organized structure for file management\n- Scalable for multiple tasks and users"
+					},
+					"response": []
+				},
+				{
+					"name": "Upload File - Temporary Storage (Custom)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Temporary file uploaded successfully', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.success).to.be.true;",
+									"    pm.expect(jsonData.data.pathType).to.eql('custom');",
+									"});",
+									"",
+									"pm.test('Custom path for temporary storage', function () {",
+									"    var jsonData = pm.response.json();",
+									"    var cdnPath = jsonData.data.cdnPath;",
+									"    pm.expect(cdnPath).to.include('temp/uploads');",
+									"});",
+									"",
+									"// Save for cleanup (temporary files should be cleaned up)",
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    pm.environment.set('temp_file_id', jsonData.data.fileId);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "file",
+									"type": "file",
+									"src": "/path/to/test/temp-file.txt",
+									"description": "Temporary file for processing"
+								},
+								{
+									"key": "custom_path",
+									"value": "temp/uploads",
+									"description": "Temporary storage location",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/files/upload",
+							"host": ["{{base_url}}"],
+							"path": [ "files", "upload"]
+						},
+						"description": "Upload a file to temporary storage using custom path approach.\n\n**Use Case:** Temporary File Processing\n- Files that need temporary storage\n- Processing workflows\n- Import/export operations\n\n**Generated Path:** `temp/uploads/{filename}`\n\n**Benefits:**\n- Simple path structure\n- Easy to identify temporary files\n- Can be cleaned up automatically\n- Separate from permanent storage"
+					},
+					"response": []
+				},
+				{
+					"name": "Get File",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('File retrieved successfully', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.success).to.be.true;",
+									"    pm.expect(jsonData.data).to.have.property('id');",
+									"    pm.expect(jsonData.data).to.have.property('fileName');",
+									"    pm.expect(jsonData.data).to.have.property('fileSize');",
+									"    pm.expect(jsonData.data).to.have.property('mimeType');",
+									"    pm.expect(jsonData.data).to.have.property('url');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/files/{{file_id}}",
+							"host": ["{{base_url}}"],
+							"path": [ "files", "{{file_id}}"]
+						},
+						"description": "Get file metadata by file ID."
+					},
+					"response": []
+				},
+				{
+					"name": "List User Files",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('User files listed successfully', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.success).to.be.true;",
+									"    pm.expect(jsonData.data).to.have.property('files');",
+									"    pm.expect(jsonData.data).to.have.property('meta');",
+									"    pm.expect(jsonData.data.files).to.be.an('array');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/files/user?limit=10&offset=0",
+							"host": ["{{base_url}}"],
+							"path": [ "files", "user"],
+							"query": [
+								{
+									"key": "limit",
+									"value": "10"
+								},
+								{
+									"key": "offset",
+									"value": "0"
+								}
+							]
+						},
+						"description": "Get current user's files with pagination support."
+					},
+					"response": []
+				},
+				{
+					"name": "List All Files",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('All files listed successfully', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.success).to.be.true;",
+									"    pm.expect(jsonData.data).to.have.property('files');",
+									"    pm.expect(jsonData.data).to.have.property('meta');",
+									"    pm.expect(jsonData.data.files).to.be.an('array');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/files?limit=10&offset=0",
+							"host": ["{{base_url}}"],
+							"path": [ "files"],
+							"query": [
+								{
+									"key": "limit",
+									"value": "10"
+								},
+								{
+									"key": "offset",
+									"value": "0"
+								}
+							]
+						},
+						"description": "Get all files in the system with pagination support."
+					},
+					"response": []
+				},
+				{
+					"name": "Delete File",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('File deleted successfully', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.success).to.be.true;",
+									"    pm.expect(jsonData.message).to.include('deleted successfully');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/files/{{file_id}}",
+							"host": ["{{base_url}}"],
+							"path": [ "files", "{{file_id}}"]
+						},
+						"description": "Delete a file by ID. This will also remove the file from storage."
+					},
+					"response": []
+				}
+			],
+			"description": "File management endpoints with flexible upload path support.\n\n## Upload Approaches\n\n### 1. Structured Path (Recommended)\nUse `category`, `entity_id`, and `file_type` parameters to create organized folder structures:\n- Path: `uploads/{user_id}/{category}/{entity_id}/{file_type}/{filename}`\n- Example: `uploads/user123/profiles/user123/avatar/abc.jpg`\n\n### 2. Custom Path\nUse `custom_path` parameter to specify exact upload location:\n- Path: `{custom_path}/{filename}`\n- Example: `my-folder/documents/abc.pdf`\n- Security validated to prevent directory traversal and malicious paths\n\n### 3. Security Testing\nIncludes tests for path validation and security measures.",
+			"auth": {
+				"type": "bearer",
+				"bearer": [
+					{
+						"key": "token",
+						"value": "{{auth_token}}",
+						"type": "string"
+					}
+				]
+			}
+		},
+		{
+			"name": "⚙️ Jobs",
+			"item": [
+				{
+					"name": "Create Job",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Job created successfully', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.success).to.be.true;",
+									"    pm.expect(jsonData.data).to.have.property('id');",
+									"    pm.expect(jsonData.data).to.have.property('name');",
+									"    pm.expect(jsonData.data).to.have.property('cronExpr');",
+									"    pm.expect(jsonData.data).to.have.property('status');",
+									"    pm.expect(jsonData.data).to.have.property('isActive');",
+									"    pm.expect(jsonData.data.status).to.eql('active');",
+									"    pm.expect(jsonData.data.isActive).to.be.true;",
+									"});",
+									"",
+									"// Save job ID for other requests",
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    pm.environment.set('job_id', jsonData.data.id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Daily Report Job\",\n    \"cronExpr\": \"0 9 * * *\",\n    \"payload\": \"{\\\"reportType\\\": \\\"daily\\\", \\\"recipients\\\": [\\\"admin@example.com\\\"]}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/jobs",
+							"host": ["{{base_url}}"],
+							"path": [ "jobs"]
+						},
+						"description": "Create a new scheduled job.\n\n**Fields:**\n- name (required): Job name (must be unique)\n- cronExpr (required): Cron expression for scheduling\n- payload (optional): JSON string with job parameters\n\n**Cron Expression Examples:**\n- `0 9 * * *` - Every day at 9:00 AM\n- `0 */6 * * *` - Every 6 hours\n- `0 0 1 * *` - First day of every month at midnight"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Job",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Job retrieved successfully', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.success).to.be.true;",
+									"    pm.expect(jsonData.data).to.have.property('id');",
+									"    pm.expect(jsonData.data).to.have.property('name');",
+									"    pm.expect(jsonData.data).to.have.property('cronExpr');",
+									"    pm.expect(jsonData.data).to.have.property('nextRun');",
+									"    pm.expect(jsonData.data).to.have.property('lastRun');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/jobs/{{job_id}}",
+							"host": ["{{base_url}}"],
+							"path": [ "jobs", "{{job_id}}"]
+						},
+						"description": "Get job details by ID including execution schedule and history."
+					},
+					"response": []
+				},
+				{
+					"name": "Update Job",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Job updated successfully', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.success).to.be.true;",
+									"    pm.expect(jsonData.data.name).to.eql('Updated Daily Report Job');",
+									"    pm.expect(jsonData.data.cronExpr).to.eql('0 10 * * *');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Updated Daily Report Job\",\n    \"cronExpr\": \"0 10 * * *\",\n    \"payload\": \"{\\\"reportType\\\": \\\"daily\\\", \\\"recipients\\\": [\\\"admin@example.com\\\", \\\"manager@example.com\\\"]}\",\n    \"isActive\": true\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/jobs/{{job_id}}",
+							"host": ["{{base_url}}"],
+							"path": [ "jobs", "{{job_id}}"]
+						},
+						"description": "Update an existing job. All fields are optional.\n\n**Note:** Changing cronExpr or isActive will reschedule the job."
+					},
+					"response": []
+				},
+				{
+					"name": "List Jobs",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Jobs listed successfully', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.success).to.be.true;",
+									"    pm.expect(jsonData.data).to.have.property('jobs');",
+									"    pm.expect(jsonData.data).to.have.property('meta');",
+									"    pm.expect(jsonData.data.jobs).to.be.an('array');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/jobs?limit=10&offset=0",
+							"host": ["{{base_url}}"],
+							"path": [ "jobs"],
+							"query": [
+								{
+									"key": "limit",
+									"value": "10"
+								},
+								{
+									"key": "offset",
+									"value": "0"
+								}
+							]
+						},
+						"description": "Get all jobs with pagination support."
+					},
+					"response": []
+				},
+				{
+					"name": "Start Job",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Job started successfully', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.success).to.be.true;",
+									"    pm.expect(jsonData.message).to.include('started successfully');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/jobs/{{job_id}}/start",
+							"host": ["{{base_url}}"],
+							"path": [ "jobs", "{{job_id}}", "start"]
+						},
+						"description": "Start a stopped job. This will activate the job and schedule it according to its cron expression."
+					},
+					"response": []
+				},
+				{
+					"name": "Stop Job",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Job stopped successfully', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.success).to.be.true;",
+									"    pm.expect(jsonData.message).to.include('stopped successfully');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/jobs/{{job_id}}/stop",
+							"host": ["{{base_url}}"],
+							"path": [ "jobs", "{{job_id}}", "stop"]
+						},
+						"description": "Stop an active job. This will deactivate the job and remove it from the scheduler."
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Job",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Job deleted successfully', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.success).to.be.true;",
+									"    pm.expect(jsonData.message).to.include('deleted successfully');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{auth_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/jobs/{{job_id}}",
+							"host": ["{{base_url}}"],
+							"path": [ "jobs", "{{job_id}}"]
+						},
+						"description": "Delete a job permanently. This will stop the job and remove it from the system."
+					},
+					"response": []
+				}
+			],
+			"description": "Job scheduling and management endpoints for automated tasks.",
+			"auth": {
+				"type": "bearer",
+				"bearer": [
+					{
+						"key": "token",
+						"value": "{{auth_token}}",
+						"type": "string"
+					}
+				]
+			}
+		},
+		{
+			"name": "❤️ Health",
+			"item": [
+				{
+					"name": "Health Check",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Health check response is valid', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('status');",
+									"    pm.expect(jsonData).to.have.property('timestamp');",
+									"    pm.expect(jsonData.status).to.eql('healthy');",
+									"});",
+									"",
+									"pm.test('Response time is less than 500ms', function () {",
+									"    pm.expect(pm.response.responseTime).to.be.below(500);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/health",
+							"host": ["{{base_url}}"],
+							"path": ["health"]
+						},
+						"description": "Basic health check endpoint to verify API availability and response time."
+					},
+					"response": []
+				},
+				{
+					"name": "API Info",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('API info response is valid', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('name');",
+									"    pm.expect(jsonData).to.have.property('version');",
+									"    pm.expect(jsonData).to.have.property('environment');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/info",
+							"host": ["{{base_url}}"],
+							"path": [ "info"]
+						},
+						"description": "Get API information including name, version, and environment details."
+					},
+					"response": []
+				}
+			],
+			"description": "Health and monitoring endpoints for API status verification."
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"// Global pre-request script",
+					"// Add any global setup here"
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"// Global test script",
+					"// Add any global tests here"
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "collection_version",
+			"value": "1.1.0",
+			"type": "string"
+		},
+		{
+			"key": "upload_features",
+			"value": "structured_paths,custom_paths,security_validation",
+			"type": "string"
+		}
+	]
+}

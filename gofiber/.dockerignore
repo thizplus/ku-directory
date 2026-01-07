@@ -1,0 +1,14 @@
+tmp/
+*.log
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+node_modules/
+.git/
+.gitignore
+README.md
+Dockerfile
+.dockerignore
+docker-compose.yml

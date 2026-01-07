@@ -1,0 +1,36 @@
+# .air.toml
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  # ระบุตำแหน่งไฟล์ main.go ที่ถูกต้อง
+  cmd = "go build -o ./tmp/main.exe ./cmd/api"  # เพิ่ม .exe สำหรับ Windows และชี้ไปที่ cmd/api
+  bin = "./tmp/main.exe"  # เพิ่ม .exe สำหรับ Windows
+  delay = 1000
+  # รวมทุกโฟลเดอร์ที่สำคัญ
+  include_dir = ["cmd", "application", "domain", "infrastructure", "interfaces", "pkg"]
+  include_ext = ["go", "env", "toml", "html"]
+  exclude_dir = ["assets", "tmp", "vendor", ".git"]
+  exclude_file = []
+  exclude_regex = ["_test.go"]
+  exclude_unchanged = false
+  follow_symlink = true
+  full_bin = ""
+  log = "build-errors.log"
+  send_interrupt = false
+  stop_on_error = true
+  # เพิ่ม poll สำหรับ Windows
+  poll = true
+
+[color]
+  app = ""
+  build = "yellow"
+  main = "magenta"
+  runner = "green"
+  watcher = "cyan"
+
+[log]
+  time = true
+
+[misc]
+  clean_on_exit = false  # แก้ไขจาก "fals" เป็น "false"
