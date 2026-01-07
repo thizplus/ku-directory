@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -147,8 +148,11 @@ func (h *AuthHandler) GoogleCallback(c *fiber.Ctx) error {
 	})
 
 	// Redirect to frontend with token (for SPA)
-	// Frontend URL should be configurable
-	frontendURL := fmt.Sprintf("http://localhost:5173/auth/callback?token=%s&redirect=%s", token, redirectURL)
+	baseURL := os.Getenv("FRONTEND_URL")
+	if baseURL == "" {
+		baseURL = "http://localhost:5173"
+	}
+	frontendURL := fmt.Sprintf("%s/auth/callback?token=%s&redirect=%s", baseURL, token, redirectURL)
 
 	logger.Auth("CALLBACK_REDIRECT", "Redirecting to frontend", map[string]interface{}{
 		"redirect_url": redirectURL,
