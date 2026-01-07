@@ -1,0 +1,55 @@
+
+
+http://localhost:5173/settings
+ผมเข้ามากดเชื่อมต่อ google drive ที่หน้านี้ จากนั้น ผมจะทำการเลือก folder ที่ต้องการ sync (โฟลเดอร์เดียวกับที่ thepthai.jm@gmail.com ได้ syncไปแล้ว)
+
+
+กด sync เรียบร้อย
+Sync:0 ไฟล์
+http://localhost:8080/api/v1/drive/sync/status
+{
+    "success": true,
+    "message": "Sync status",
+    "data": {
+        "id": "ccf97ea3-79e0-4510-8bd4-aadaa1cfbb0e",
+        "user_id": "49b7f1e5-47f0-4ada-a096-2b28174fffbf",
+        "job_type": "drive_sync",
+        "status": "completed",
+        "total_files": 0,
+        "processed_files": 0,
+        "failed_files": 0,
+        "started_at": "2026-01-07T15:25:31.77962+07:00",
+        "completed_at": "2026-01-07T15:25:32.110804+07:00",
+        "created_at": "2026-01-07T15:25:27.107882+07:00",
+        "updated_at": "2026-01-07T15:25:32.11132+07:00"
+    }
+}
+
+
+กลับไปที่หน้าคลัง
+
+เส้น api ที่มีปัญหา ที่ดว่าน่าจะยังไม่ได้ใช้ข้อมูลร่วมกันคือ
+http://localhost:8080/api/v1/drive/photos?page=1&limit=24
+{
+    "success": true,
+    "message": "Photos retrieved",
+    "data": {
+        "photos": [],
+        "total": 0,
+        "page": 1,
+        "limit": 24
+    }
+}
+http://localhost:8080/api/v1/faces/stats{
+    "success": true,
+    "message": "Stats retrieved",
+    "data": {
+        "total_photos": 0,
+        "processed_photos": 0,
+        "pending_photos": 0,
+        "failed_photos": 0,
+        "total_faces": 0
+    }
+}
+
+แต่คลิกที่โฟลเดอร์ย่อย แสดงภาพครับ

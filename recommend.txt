@@ -1,0 +1,59 @@
+1. ทำไม Strict Mode ต้องรัน 2 ครั้ง?
+React ตั้งใจรัน useEffect (และ Lifecycle อื่นๆ) 2 รอบ เฉพาะในโหมด Development เพื่อช่วยเช็คว่า:
+
+คุณเขียน Cleanup Function (ฟังก์ชันล้างขยะ) ถูกต้องไหม?
+
+มี Memory Leak เกิดขึ้นหรือเปล่า?
+
+Component ของคุณทำงานตามหลัก Pure Function ไหม?
+
+2. ข้อมูลมันจะถูกต้องได้ยังไง? (ฝั่ง Frontend)
+ถ้าคุณเขียนโค้ดตามมาตรฐาน ข้อมูลจะ "ถูกต้อง" เพราะการเชื่อมต่อครั้งแรกจะถูก "ตัดทิ้ง" ทันทีเมื่อครั้งที่สองเริ่ม:
+
+TypeScript
+
+useEffect(() => {
+    // 1. สร้างการเชื่อมต่อ (รอบที่ 1)
+    const socket = new WebSocket('ws://localhost:8080');
+
+    socket.onmessage = (event) => {
+        console.log("Message from 1st connection:", event.data);
+    };
+
+    // 2. Cleanup Function (หัวใจสำคัญ!)
+    return () => {
+        // เมื่อ React รันรอบที่ 2 มันจะมาเรียกฟังก์ชันนี้ก่อน
+        // เพื่อปิดการเชื่อมต่อรอบที่ 1 ทิ้งไป
+        socket.close(); 
+    };
+}, []); 
+สิ่งที่เกิดขึ้นจริง: รอบที่ 1 (Connect) -> รอบที่ 1 (Disconnect ทันที) -> รอบที่ 2 (Connect ค้างไว้)
+
+ผลลัพธ์: ใน Browser ของคุณจะเหลือ WebSocket ที่ทำงานจริงๆ แค่ 1 อัน เสมอ ข้อมูลจึงไม่ซ้ำครับ
+
+3. แล้วฝั่ง Backend ล่ะ? (Idempotent Backend)
+ในกรณีของ "Add Folder" หรือ "Sync Job" ที่คุณวางแผนไว้ หาก Backend ได้รับคำสั่งซ้ำ 2 ครั้งติดกัน (Double Request) เราใช้เทคนิคนี้แก้ครับ:
+
+Database Constraints: ใช้ UNIQUE key เช่น drive_folder_id ถ้า Request ที่ 2 เข้ามาซ้ำ มันจะพังที่ระดับ Database หรือเราจะเช็คก่อนว่า if folderExists then return existingFolder.
+
+Status Check: ก่อนจะเริ่มสร้าง Job ใหม่ ให้เช็คก่อนว่ามี Job ของ Folder นี้ที่สถานะเป็น pending หรือ syncing อยู่แล้วหรือไม่ ถ้ามีก็ไม่ต้องสร้างใหม่
+
+Upsert: ใช้ท่า ON CONFLICT DO UPDATE เพื่อให้การยัดข้อมูลซ้ำคือการอัปเดตข้อมูลเดิม ไม่ใช่การสร้างข้อมูลใหม่
+
+4. วิธีป้องกันไม่ให้ส่ง Progress ซ้ำซ้อน (WebSocket Hub)
+ฝั่ง Backend (Go) ของคุณควรมีระบบ Hub ที่ฉลาด:
+
+เมื่อ Client เชื่อมต่อเข้ามาใหม่ (รอบที่ 2 จาก Strict Mode) ระบบควรจะถอด Client ID เก่าออก หรือมองว่าเป็น Client เดียวกัน (เช่น Map ด้วย UserID)
+
+การส่ง Progress ผ่าน WebSocket จะยิงไปที่ Channel หรือ Room ของโฟลเดอร์นั้นๆ ต่อให้ Client เปิด 2 จอ (หรือโดน Strict Mode) เขาก็จะได้รับข้อมูลชุดเดียวกันจากแหล่งกำเนิด (Source of Truth) เดียวกันครับ
+
+วิธีสังเกตว่าเราเขียนพลาด:
+ถ้าคุณลืมใส่ socket.close() ใน Cleanup function:
+
+ในหน้า Network Tab ของ Chrome คุณจะเห็น WebSocket Connection ค้างอยู่ 2 เส้น
+
+คุณจะเห็น Log ใน Console พ่นออกมา เบิ้ล 2 ครั้ง ต่อ 1 ข้อความ
+
+วิธีแก้: ใส่ Cleanup function เสมอ หรือปิด Strict Mode ใน main.tsx (แต่ไม่แนะนำ ให้แก้ที่โค้ดดีกว่าครับ)
+
+สรุป: ข้อมูลถูกต้องได้เพราะ "อันเก่าถูกปิด อันใหม่มาแทน" และ Backend มีการเช็ค "ความซ้ำซ้อน" ครับ

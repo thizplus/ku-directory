@@ -26,4 +26,5 @@ func SetupFaceRoutes(router fiber.Router, h *handlers.Handlers) {
 
 	// Stats
 	faces.Get("/stats", h.Face.GetProcessingStats)      // Get processing stats
+	faces.Post("/retry", h.Face.RetryFailed)            // Retry failed face processing
 }

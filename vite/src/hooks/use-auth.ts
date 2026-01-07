@@ -52,12 +52,16 @@ export const useAuth = create<AuthState>()(
         user: state.user,
         isAuthenticated: state.isAuthenticated,
       }),
+      onRehydrateStorage: () => (state) => {
+        // Set loading to false after rehydration
+        state?.setLoading(false)
+      },
     }
   )
 )
 
 // API base URL
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1'
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3010/api/v1'
 
 // Get current user from API
 export async function getCurrentUser(token: string): Promise<User> {

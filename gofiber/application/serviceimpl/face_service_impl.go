@@ -402,3 +402,40 @@ func (s *FaceServiceImpl) GetProcessingStats(ctx context.Context, userID uuid.UU
 		TotalFaces:      totalFaces,
 	}, nil
 }
+
+// RetryFailedPhotos resets failed photos to pending for reprocessing
+func (s *FaceServiceImpl) RetryFailedPhotos(ctx context.Context, userID uuid.UUID, folderID *uuid.UUID) (int64, error) {
+	log.Printf("🔄 RetryFailedPhotos called for user: %s, folder: %v", userID, folderID)
+
+	// Get user's accessible folders to validate
+	folders, err := s.sharedFolderRepo.GetFoldersByUser(ctx, userID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get user folders: %w", err)
+	}
+
+	if len(folders) == 0 {
+		return 0, nil
+	}
+
+	// If specific folder requested, verify user has access
+	if folderID != nil {
+		hasAccess := false
+		for _, f := range folders {
+			if f.ID == *folderID {
+				hasAccess = true
+				break
+			}
+		}
+		if !hasAccess {
+			return 0, fmt.Errorf("access denied to folder")
+		}
+	}
+
+	count, err := s.photoRepo.ResetFailedToPending(ctx, folderID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to reset failed photos: %w", err)
+	}
+
+	log.Printf("🔄 Reset %d failed photos to pending", count)
+	return count, nil
+}

@@ -591,3 +591,19 @@ func (r *PhotoRepositoryImpl) DeleteNotInDriveIDsForFolder(ctx context.Context, 
 
 	return totalDeleted, err
 }
+
+// ResetFailedToPending resets all failed photos to pending status for retry
+func (r *PhotoRepositoryImpl) ResetFailedToPending(ctx context.Context, folderID *uuid.UUID) (int64, error) {
+	query := r.db.WithContext(ctx).Model(&models.Photo{}).Where("face_status = ?", models.FaceStatusFailed)
+
+	if folderID != nil {
+		query = query.Where("shared_folder_id = ?", *folderID)
+	}
+
+	result := query.Updates(map[string]interface{}{
+		"face_status": models.FaceStatusPending,
+		"updated_at":  time.Now(),
+	})
+
+	return result.RowsAffected, result.Error
+}

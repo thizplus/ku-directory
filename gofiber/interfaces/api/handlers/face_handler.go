@@ -370,6 +370,39 @@ func (h *FaceHandler) GetProcessingStats(c *fiber.Ctx) error {
 	return utils.SuccessResponse(c, "Stats retrieved", stats)
 }
 
+// RetryFailed resets failed photos to pending for reprocessing
+// @Summary Retry failed face processing
+// @Tags Faces
+// @Produce json
+// @Param folder_id query string false "Folder ID (optional, retry all if not specified)"
+// @Success 200 {object} utils.Response
+// @Router /api/v1/faces/retry [post]
+func (h *FaceHandler) RetryFailed(c *fiber.Ctx) error {
+	userCtx, err := utils.GetUserFromContext(c)
+	if err != nil {
+		return utils.UnauthorizedResponse(c, "Not authenticated")
+	}
+
+	// Optional folder ID
+	var folderID *uuid.UUID
+	if folderIDStr := c.Query("folder_id"); folderIDStr != "" {
+		parsed, err := uuid.Parse(folderIDStr)
+		if err != nil {
+			return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid folder ID", err)
+		}
+		folderID = &parsed
+	}
+
+	count, err := h.faceService.RetryFailedPhotos(c.Context(), userCtx.ID, folderID)
+	if err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to retry", err)
+	}
+
+	return utils.SuccessResponse(c, "Retry initiated", map[string]interface{}{
+		"reset_count": count,
+	})
+}
+
 // GetFaces returns paginated faces for a user
 // @Summary Get all faces with pagination
 // @Tags Faces

@@ -34,6 +34,7 @@ type PhotoRepository interface {
 	// Face processing
 	GetPendingFaceProcessing(ctx context.Context, folderID uuid.UUID, limit int) ([]models.Photo, error)
 	GetByFaceStatus(ctx context.Context, status models.FaceProcessingStatus, limit int) ([]models.Photo, error)
+	ResetFailedToPending(ctx context.Context, folderID *uuid.UUID) (int64, error) // Reset failed photos to pending, optionally by folder
 
 	// Delete operations
 	DeleteByDriveFileID(ctx context.Context, driveFileID string) error

@@ -1,6 +1,7 @@
 // src/routes/index.tsx
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
+import { ProtectedRoute } from '@/components/auth/protected-route';
 
 // Shared Pages
 const LoginPage = lazy(() => import('@/page/globals/login/page'));
@@ -39,8 +40,8 @@ const AppRoutes = () => {
         {/* Root redirect */}
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
 
-        {/* Main routes with layout */}
-        <Route element={<PageLayout />}>
+        {/* Protected routes with layout */}
+        <Route element={<ProtectedRoute><PageLayout /></ProtectedRoute>}>
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/gallery" element={<GalleryPage />} />
           <Route path="/face-search" element={<FaceSearchPage />} />

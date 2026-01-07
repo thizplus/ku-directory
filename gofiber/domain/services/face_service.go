@@ -68,6 +68,9 @@ type FaceService interface {
 
 	// Get processing stats
 	GetProcessingStats(ctx context.Context, userID uuid.UUID) (*FaceProcessingStats, error)
+
+	// Retry failed photos
+	RetryFailedPhotos(ctx context.Context, userID uuid.UUID, folderID *uuid.UUID) (int64, error)
 }
 
 // FaceProcessingStats contains face processing statistics
