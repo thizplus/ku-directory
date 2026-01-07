@@ -17,7 +17,7 @@ type WebSocketMessage = {
   data: Record<string, unknown>
 }
 
-const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8080/ws'
+const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:3010/ws'
 
 // Singleton WebSocket instance to prevent duplicate connections
 let globalWs: WebSocket | null = null
