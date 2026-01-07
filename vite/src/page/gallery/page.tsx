@@ -603,7 +603,7 @@ export default function GalleryPage() {
             <Button
               size="sm"
               variant="outline"
-              onClick={() => retryFailedMutation.mutate()}
+              onClick={() => retryFailedMutation.mutate(undefined)}
               disabled={retryFailedMutation.isPending}
               className="text-destructive border-destructive/50 hover:bg-destructive/10"
             >

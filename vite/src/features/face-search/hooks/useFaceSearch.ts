@@ -190,7 +190,7 @@ export function useRetryFailedPhotos() {
     },
     onSuccess: (data) => {
       // Update store with the number of reset photos
-      if (data.reset_count > 0) {
+      if (data && data.reset_count > 0) {
         onRetryFailed(data.reset_count)
       }
       // Invalidate stats to refresh from server
