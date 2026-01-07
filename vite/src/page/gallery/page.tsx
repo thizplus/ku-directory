@@ -605,7 +605,7 @@ export default function GalleryPage() {
               variant="outline"
               onClick={() => retryFailedMutation.mutate()}
               disabled={retryFailedMutation.isPending}
-              className="text-orange-600 border-orange-300 hover:bg-orange-50"
+              className="text-destructive border-destructive/50 hover:bg-destructive/10"
             >
               {retryFailedMutation.isPending ? (
                 <>
@@ -658,7 +658,7 @@ export default function GalleryPage() {
           <MetricItem
             label="ล้มเหลว"
             value={stats?.failed_photos || 0}
-            icon={<AlertTriangle className="h-3.5 w-3.5 text-orange-500" />}
+            icon={<AlertTriangle className="h-3.5 w-3.5 text-destructive" />}
             isLoading={statsLoading}
           />
         )}
