@@ -75,10 +75,8 @@ type GeminiConfig struct {
 }
 
 func LoadConfig() (*Config, error) {
-	err := godotenv.Load()
-	if err != nil {
-		return nil, err
-	}
+	// Load .env file if exists (optional for production)
+	_ = godotenv.Load() // Ignore error if .env doesn't exist
 
 	redisDB, _ := strconv.Atoi(getEnv("REDIS_DB", "0"))
 
