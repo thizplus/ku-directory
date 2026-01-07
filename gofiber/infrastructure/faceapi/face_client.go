@@ -58,7 +58,7 @@ func NewFaceClient(baseURL string) *FaceClient {
 	return &FaceClient{
 		baseURL: baseURL,
 		httpClient: &http.Client{
-			Timeout: 60 * time.Second, // Face processing can take time
+			Timeout: 120 * time.Second, // Face processing can take time, especially on CPU
 		},
 	}
 }

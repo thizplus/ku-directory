@@ -115,12 +115,12 @@ func NewFaceWorker(
 		photoRepo:        photoRepo,
 		faceRepo:         faceRepo,
 		sharedFolderRepo: sharedFolderRepo,
-		pollInterval:     10 * time.Second, // Reduced from 15s for faster processing
-		maxConcurrent:    10,               // Increased from 3 for better throughput
-		batchSize:        50,               // Increased from 10 for better throughput
-		maxRetries:       3,                // Retry failed operations
-		baseRetryDelay:   2 * time.Second,  // Base delay for exponential backoff
-		circuitBreaker:   NewCircuitBreaker(5, 30*time.Second), // Open after 5 failures, reset after 30s
+		pollInterval:     10 * time.Second,  // Reduced from 15s for faster processing
+		maxConcurrent:    3,                 // Reduced for CPU-based Face API (prevent overload)
+		batchSize:        20,                // Reduced batch size for stability
+		maxRetries:       3,                 // Retry failed operations
+		baseRetryDelay:   2 * time.Second,   // Base delay for exponential backoff
+		circuitBreaker:   NewCircuitBreaker(10, 60*time.Second), // Open after 10 failures, reset after 60s
 	}
 }
 
