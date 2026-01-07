@@ -142,4 +142,19 @@ export const faceService = {
 
     return response.data
   },
+
+  /**
+   * Retry failed face processing
+   * Resets failed photos to pending for reprocessing
+   */
+  retryFailed: async (
+    folderId?: string
+  ): Promise<ApiResponse<{ reset_count: number }>> => {
+    const params = folderId ? `?folder_id=${folderId}` : ''
+    const response = await apiClient.post<ApiResponse<{ reset_count: number }>>(
+      `${FACE_API.RETRY}${params}`
+    )
+
+    return response.data
+  },
 }

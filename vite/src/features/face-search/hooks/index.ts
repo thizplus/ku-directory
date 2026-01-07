@@ -6,4 +6,5 @@ export {
   useFaceSearchByFaceId,
   useFaces,
   useFacesByPhoto,
+  useRetryFailedPhotos,
 } from './useFaceSearch'

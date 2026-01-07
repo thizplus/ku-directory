@@ -10,6 +10,7 @@ import {
   RefreshCw,
   Loader2,
   AlertCircle,
+  AlertTriangle,
   CheckCircle2,
   Clock,
   ImageOff,
@@ -23,6 +24,7 @@ import {
   Check,
   ZoomIn,
   Newspaper,
+  RotateCcw,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -37,7 +39,7 @@ import {
   useFolderPhotos,
   useTriggerFolderSync,
 } from "@/features/folders"
-import { useFaceStats } from "@/features/face-search"
+import { useFaceStats, useRetryFailedPhotos } from "@/features/face-search"
 import { useAuth } from "@/hooks/use-auth"
 import { useDownloadProgressStore } from "@/stores/download-progress"
 import { useSyncProgressStore } from "@/stores/sync-progress"
@@ -328,6 +330,9 @@ export default function GalleryPage() {
   // Sync folder
   const triggerSyncMutation = useTriggerFolderSync()
 
+  // Retry failed photos
+  const retryFailedMutation = useRetryFailedPhotos()
+
   // Build tree structure from folder paths (supports unlimited nesting levels)
   interface TreeNode {
     name: string
@@ -593,11 +598,38 @@ export default function GalleryPage() {
               </>
             )}
           </Button>
+          {/* Retry Failed Button - only show if there are failed photos */}
+          {(stats?.failed_photos || 0) > 0 && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => retryFailedMutation.mutate()}
+              disabled={retryFailedMutation.isPending}
+              className="text-orange-600 border-orange-300 hover:bg-orange-50"
+            >
+              {retryFailedMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  กำลัง Retry...
+                </>
+              ) : (
+                <>
+                  <RotateCcw className="h-4 w-4 mr-2" />
+                  Retry ({stats?.failed_photos})
+                </>
+              )}
+            </Button>
+          )}
         </div>
       </div>
 
       {/* Key Metrics */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className={cn(
+        "grid gap-4",
+        (stats?.failed_photos || 0) > 0
+          ? "grid-cols-2 lg:grid-cols-6"
+          : "grid-cols-2 lg:grid-cols-5"
+      )}>
         <MetricItem
           label="โฟลเดอร์"
           value={sharedFolders.length}
@@ -622,6 +654,14 @@ export default function GalleryPage() {
           icon={<Clock className="h-3.5 w-3.5" />}
           isLoading={statsLoading}
         />
+        {(stats?.failed_photos || 0) > 0 && (
+          <MetricItem
+            label="ล้มเหลว"
+            value={stats?.failed_photos || 0}
+            icon={<AlertTriangle className="h-3.5 w-3.5 text-orange-500" />}
+            isLoading={statsLoading}
+          />
+        )}
         <MetricItem
           label="ใบหน้าที่พบ"
           value={stats?.total_faces || 0}

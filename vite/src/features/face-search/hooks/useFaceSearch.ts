@@ -171,3 +171,33 @@ export function useFacesByPhoto(photoId: string, enabled = true) {
     staleTime: CACHE_TIMES.FACES,
   })
 }
+
+/**
+ * Retry failed face processing
+ * Resets failed photos to pending for reprocessing
+ */
+export function useRetryFailedPhotos() {
+  const onRetryFailed = useFaceStatsStore((state) => state.onRetryFailed)
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (folderId?: string) => {
+      const response = await faceService.retryFailed(folderId)
+      if (!response.success) {
+        throw new Error(response.message)
+      }
+      return response.data
+    },
+    onSuccess: (data) => {
+      // Update store with the number of reset photos
+      if (data.reset_count > 0) {
+        onRetryFailed(data.reset_count)
+      }
+      // Invalidate stats to refresh from server
+      queryClient.invalidateQueries({ queryKey: faceKeys.stats() })
+    },
+    onError: (error) => {
+      console.error('Retry failed photos error:', getErrorMessage(error))
+    },
+  })
+}

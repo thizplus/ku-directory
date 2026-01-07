@@ -39,6 +39,7 @@ export const FACE_API = {
   LIST: '/faces',
   BY_PHOTO: (photoId: string) => `/faces/photo/${photoId}`,
   STATS: '/faces/stats',
+  RETRY: '/faces/retry',
 } as const
 
 // Photo API

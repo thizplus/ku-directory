@@ -20,6 +20,9 @@ interface FaceStatsStore {
   // Update from photo:updated WebSocket event
   onPhotoProcessed: (faceCount: number, status: 'completed' | 'failed') => void
 
+  // Called when retry is triggered (failed → pending)
+  onRetryFailed: (resetCount: number) => void
+
   // Reset
   reset: () => void
 }
@@ -51,6 +54,18 @@ export const useFaceStatsStore = create<FaceStatsStore>((set) => ({
             pending_photos: Math.max(0, state.stats.pending_photos - 1),
           },
         }
+      }
+    }),
+
+  onRetryFailed: (resetCount) =>
+    set((state) => {
+      if (!state.stats) return state
+      return {
+        stats: {
+          ...state.stats,
+          failed_photos: Math.max(0, state.stats.failed_photos - resetCount),
+          pending_photos: state.stats.pending_photos + resetCount,
+        },
       }
     }),
 
