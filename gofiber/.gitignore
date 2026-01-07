@@ -17,9 +17,6 @@ go.work
 # Dependency directories (remove the comment below to include it)
 vendor/
 
-# Go modules
-go.sum
-
 # Environment variables
 .env
 .env.local
