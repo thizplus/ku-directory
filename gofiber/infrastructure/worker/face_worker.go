@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -17,6 +16,7 @@ import (
 	"gofiber-template/infrastructure/faceapi"
 	"gofiber-template/infrastructure/googledrive"
 	"gofiber-template/infrastructure/websocket"
+	"gofiber-template/pkg/logger"
 )
 
 // FaceWorker processes photos for face detection
@@ -138,7 +138,7 @@ func (w *FaceWorker) Start() {
 	w.wg.Add(1)
 	go w.run()
 
-	log.Println("✓ Face worker started")
+	logger.Face("worker_started", "Face worker started", nil)
 }
 
 // Stop stops the face worker gracefully
@@ -153,7 +153,7 @@ func (w *FaceWorker) Stop() {
 
 	w.cancel()
 	w.wg.Wait()
-	log.Println("✓ Face worker stopped")
+	logger.Face("worker_stopped", "Face worker stopped", nil)
 }
 
 // IsRunning returns whether the worker is running
@@ -172,7 +172,7 @@ func (w *FaceWorker) run() {
 
 	// Check if face API is available before starting
 	if !w.faceClient.IsAvailable(w.ctx) {
-		log.Println("Warning: Face API is not available, worker will retry...")
+		logger.Face("face_api_unavailable", "Face API is not available, worker will retry", nil)
 	}
 
 	// Process immediately on start
@@ -192,21 +192,23 @@ func (w *FaceWorker) run() {
 func (w *FaceWorker) processPendingPhotos() {
 	// Check circuit breaker
 	if w.circuitBreaker.IsOpen() {
-		log.Printf("Circuit breaker open (failures: %d), skipping face processing", w.circuitBreaker.GetFailures())
+		logger.Face("circuit_breaker_open", "Circuit breaker open, skipping face processing", map[string]interface{}{
+			"failures": w.circuitBreaker.GetFailures(),
+		})
 		return
 	}
 
 	// Check if face API is available
 	if !w.faceClient.IsAvailable(w.ctx) {
 		w.circuitBreaker.RecordFailure()
-		log.Println("Face API not available, circuit breaker triggered")
+		logger.Face("face_api_unavailable_trigger", "Face API not available, circuit breaker triggered", nil)
 		return
 	}
 
 	// Get photos with pending face status
 	photos, err := w.photoRepo.GetByFaceStatus(w.ctx, models.FaceStatusPending, w.batchSize)
 	if err != nil {
-		log.Printf("Error fetching pending photos: %v", err)
+		logger.FaceError("fetch_pending_photos_failed", "Error fetching pending photos", err, nil)
 		return
 	}
 
@@ -214,7 +216,10 @@ func (w *FaceWorker) processPendingPhotos() {
 		return
 	}
 
-	log.Printf("Processing %d photos for face detection (concurrency: %d)", len(photos), w.maxConcurrent)
+	logger.Face("processing_photos", "Processing photos for face detection", map[string]interface{}{
+		"photo_count": len(photos),
+		"concurrency": w.maxConcurrent,
+	})
 
 	// Process each photo
 	var photoWg sync.WaitGroup
@@ -242,7 +247,10 @@ func (w *FaceWorker) processPendingPhotos() {
 
 	photoWg.Wait()
 
-	log.Printf("Batch complete: %d success, %d failed", successCount, failCount)
+	logger.Face("batch_complete", "Photo batch processing complete", map[string]interface{}{
+		"success_count": successCount,
+		"fail_count":    failCount,
+	})
 }
 
 // processPhotoWithRetry processes a photo with retry logic
@@ -253,7 +261,12 @@ func (w *FaceWorker) processPhotoWithRetry(photo models.Photo) bool {
 		if attempt > 0 {
 			// Exponential backoff
 			delay := w.baseRetryDelay * time.Duration(1<<uint(attempt-1))
-			log.Printf("Retry %d/%d for photo %s after %v", attempt, w.maxRetries, photo.ID, delay)
+			logger.Face("photo_retry", "Retrying photo processing", map[string]interface{}{
+				"photo_id":    photo.ID.String(),
+				"attempt":     attempt,
+				"max_retries": w.maxRetries,
+				"delay_ms":    delay.Milliseconds(),
+			})
 			time.Sleep(delay)
 		}
 
@@ -263,7 +276,11 @@ func (w *FaceWorker) processPhotoWithRetry(photo models.Photo) bool {
 		}
 
 		lastErr = err
-		log.Printf("Photo %s processing failed (attempt %d/%d): %v", photo.ID, attempt+1, w.maxRetries+1, err)
+		logger.FaceError("photo_processing_failed", "Photo processing failed", err, map[string]interface{}{
+			"photo_id": photo.ID.String(),
+			"attempt":  attempt + 1,
+			"max":      w.maxRetries + 1,
+		})
 
 		// Check if error is retryable
 		if !isRetryableError(err) {
@@ -321,13 +338,10 @@ func (w *FaceWorker) processPhoto(photo models.Photo) error {
 	// Check for existing faces (prevent duplicates on restart)
 	existingFaces, _ := w.faceRepo.GetByPhoto(ctx, photoID)
 	if len(existingFaces) > 0 {
-		log.Printf("Photo %s already has %d faces, skipping", photoID, len(existingFaces))
 		// Update status to completed
 		w.photoRepo.UpdateFaceStatus(ctx, photoID, models.FaceStatusCompleted, len(existingFaces))
 		return nil
 	}
-
-	log.Printf("Processing photo %s: %s", photoID, photo.FileName)
 
 	// Update status to processing
 	if err := w.photoRepo.UpdateFaceStatus(ctx, photoID, models.FaceStatusProcessing, 0); err != nil {
@@ -361,16 +375,13 @@ func (w *FaceWorker) processPhoto(photo models.Photo) error {
 	// Process detected faces
 	if len(result.Faces) == 0 {
 		// No faces detected - mark as completed
-		if err := w.photoRepo.UpdateFaceStatus(ctx, photoID, models.FaceStatusCompleted, 0); err != nil {
-			log.Printf("Error updating photo status: %v", err)
-		}
+		w.photoRepo.UpdateFaceStatus(ctx, photoID, models.FaceStatusCompleted, 0)
 		// Broadcast to all users with folder access
 		w.broadcastToFolderUsers(ctx, photo.SharedFolderID, "photo:updated", map[string]interface{}{
 			"photoId":    photoID.String(),
 			"faceStatus": models.FaceStatusCompleted,
 			"faceCount":  0,
 		})
-		log.Printf("No faces found in photo %s", photoID)
 		return nil
 	}
 
@@ -403,9 +414,7 @@ func (w *FaceWorker) processPhoto(photo models.Photo) error {
 	}
 
 	// Update face count and status
-	if err := w.photoRepo.UpdateFaceStatus(ctx, photoID, models.FaceStatusCompleted, len(faces)); err != nil {
-		log.Printf("Error updating photo status: %v", err)
-	}
+	w.photoRepo.UpdateFaceStatus(ctx, photoID, models.FaceStatusCompleted, len(faces))
 
 	// Broadcast to all users with folder access
 	w.broadcastToFolderUsers(ctx, photo.SharedFolderID, "photo:updated", map[string]interface{}{
@@ -414,7 +423,10 @@ func (w *FaceWorker) processPhoto(photo models.Photo) error {
 		"faceCount":  len(faces),
 	})
 
-	log.Printf("Photo %s processed: %d faces detected", photoID, len(faces))
+	logger.Face("photo_processed", "Photo processed successfully", map[string]interface{}{
+		"photo_id":   photoID.String(),
+		"face_count": len(faces),
+	})
 	return nil
 }
 
@@ -460,7 +472,6 @@ func (w *FaceWorker) downloadImage(ctx context.Context, user *models.User, photo
 	)
 	if err != nil {
 		// Fallback: try to download the full file
-		log.Printf("Thumbnail download failed, trying full file: %v", err)
 
 		srv, srvErr := w.driveClient.GetDriveService(ctx, user.DriveAccessToken, user.DriveRefreshToken, expiry)
 		if srvErr != nil {
@@ -486,11 +497,12 @@ func (w *FaceWorker) downloadImage(ctx context.Context, user *models.User, photo
 
 // failPhotoWithBroadcast marks a photo as failed and broadcasts the update
 func (w *FaceWorker) failPhotoWithBroadcast(ctx context.Context, photo models.Photo, errMsg string) {
-	log.Printf("Photo %s face processing failed: %s", photo.ID, errMsg)
+	logger.FaceError("photo_face_failed", "Photo face processing failed", nil, map[string]interface{}{
+		"photo_id": photo.ID.String(),
+		"error":    errMsg,
+	})
 
-	if err := w.photoRepo.UpdateFaceStatus(ctx, photo.ID, models.FaceStatusFailed, 0); err != nil {
-		log.Printf("Error updating photo status: %v", err)
-	}
+	w.photoRepo.UpdateFaceStatus(ctx, photo.ID, models.FaceStatusFailed, 0)
 
 	// Broadcast to all users with folder access
 	w.broadcastToFolderUsers(ctx, photo.SharedFolderID, "photo:updated", map[string]interface{}{
@@ -505,7 +517,6 @@ func (w *FaceWorker) failPhotoWithBroadcast(ctx context.Context, photo models.Ph
 func (w *FaceWorker) broadcastToFolderUsers(ctx context.Context, folderID uuid.UUID, messageType string, data map[string]interface{}) {
 	users, err := w.sharedFolderRepo.GetUsersByFolder(ctx, folderID)
 	if err != nil {
-		log.Printf("Error getting folder users for broadcast: %v", err)
 		return
 	}
 

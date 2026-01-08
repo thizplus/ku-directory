@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"strings"
 	"sync"
 	"time"
@@ -76,7 +75,7 @@ func NewSyncWorker(
 func (w *SyncWorker) TriggerSync() {
 	select {
 	case w.triggerCh <- struct{}{}:
-		log.Println("🔔 Sync triggered")
+		logger.Sync("sync_triggered", "Sync triggered", nil)
 	default:
 		// Channel full, already triggered
 	}
@@ -96,7 +95,7 @@ func (w *SyncWorker) Start() {
 	w.wg.Add(1)
 	go w.run()
 
-	log.Println("✓ Sync worker started")
+	logger.Sync("worker_started", "Sync worker started", nil)
 }
 
 // Stop stops the sync worker gracefully
@@ -111,7 +110,7 @@ func (w *SyncWorker) Stop() {
 
 	w.cancel()
 	w.wg.Wait()
-	log.Println("✓ Sync worker stopped")
+	logger.Sync("worker_stopped", "Sync worker stopped", nil)
 }
 
 // IsRunning returns whether the worker is running
@@ -143,7 +142,7 @@ func (w *SyncWorker) run() {
 func (w *SyncWorker) processPendingJobs() {
 	jobs, err := w.syncJobRepo.GetPendingJobs(w.ctx, models.SyncJobTypeDriveSync, w.maxConcurrent)
 	if err != nil {
-		log.Printf("Error fetching pending jobs: %v", err)
+		logger.SyncError("fetch_pending_jobs_failed", "Error fetching pending jobs", err, nil)
 		return
 	}
 
@@ -151,7 +150,9 @@ func (w *SyncWorker) processPendingJobs() {
 		return
 	}
 
-	log.Printf("Processing %d sync jobs", len(jobs))
+	logger.Sync("processing_jobs", "Processing sync jobs", map[string]interface{}{
+		"job_count": len(jobs),
+	})
 
 	var jobWg sync.WaitGroup
 	sem := make(chan struct{}, w.maxConcurrent)
@@ -309,29 +310,30 @@ func (w *SyncWorker) processIncrementalSync(ctx context.Context, job models.Sync
 	jobID := job.ID
 	startTime := time.Now()
 
-	log.Println("┌────────────────────────────────────────────────────────────────")
-	log.Printf("│ INCREMENTAL SYNC: %s", folder.DriveFolderName)
-	log.Printf("│ Job ID: %s", jobID)
-	log.Println("├────────────────────────────────────────────────────────────────")
+	logger.Sync("incremental_sync_start", "Starting incremental sync", map[string]interface{}{
+		"job_id":      jobID.String(),
+		"folder_id":   folder.ID.String(),
+		"folder_name": folder.DriveFolderName,
+	})
 
-	log.Println("│ [1/3] Fetching changes from Google Drive...")
 	changes, newPageToken, err := w.driveClient.GetChanges(ctx, srv, folder.PageToken)
 	if err != nil {
-		log.Printf("│ ⚠ Failed to get changes: %v", err)
-		log.Println("│ → Falling back to full sync...")
-		log.Println("└────────────────────────────────────────────────────────────────")
+		logger.SyncError("get_changes_failed", "Failed to get changes, falling back to full sync", err, map[string]interface{}{
+			"job_id":    jobID.String(),
+			"folder_id": folder.ID.String(),
+		})
 		w.sharedFolderRepo.Update(ctx, folder.ID, &models.SharedFolder{PageToken: ""})
 		w.processFullSync(ctx, job, folder, srv)
 		return
 	}
 
-	log.Printf("│ ✓ Found %d changes", len(changes))
+	logger.Sync("changes_found", "Found changes", map[string]interface{}{
+		"job_id":       jobID.String(),
+		"change_count": len(changes),
+	})
 
 	if len(changes) == 0 {
-		log.Println("│ → No changes to process")
-		log.Println("│ [2/3] Saving new page token...")
 		w.sharedFolderRepo.Update(ctx, folder.ID, &models.SharedFolder{PageToken: newPageToken})
-		log.Printf("│ ✓ Page token saved: %s", truncateString(newPageToken, 20))
 
 		// Mark job as completed
 		now := time.Now()
@@ -343,7 +345,6 @@ func (w *SyncWorker) processIncrementalSync(ctx context.Context, job models.Sync
 			CompletedAt:    &now,
 			UpdatedAt:      now,
 		})
-		log.Printf("│ ✓ Job completed in %v", duration)
 
 		// Update folder status
 		w.sharedFolderRepo.UpdateSyncStatus(ctx, folder.ID, models.SyncStatusIdle, "")
@@ -362,19 +363,19 @@ func (w *SyncWorker) processIncrementalSync(ctx context.Context, job models.Sync
 			"noChanges":      true,
 		})
 
-		// Log to file
-		logger.Sync("INCREMENTAL_SYNC_NO_CHANGES", "No changes found in incremental sync", map[string]interface{}{
-			"job_id":     jobID.String(),
-			"folder_id":  folder.ID.String(),
-			"duration":   duration.String(),
-			"page_token": truncateString(newPageToken, 20),
+		logger.Sync("incremental_sync_no_changes", "No changes found in incremental sync", map[string]interface{}{
+			"job_id":      jobID.String(),
+			"folder_id":   folder.ID.String(),
+			"folder_name": folder.DriveFolderName,
+			"duration_ms": duration.Milliseconds(),
 		})
-
-		log.Println("└────────────────────────────────────────────────────────────────")
 		return
 	}
 
-	log.Printf("│ [2/3] Processing %d changes...", len(changes))
+	logger.Sync("processing_changes", "Processing changes", map[string]interface{}{
+		"job_id":       jobID.String(),
+		"change_count": len(changes),
+	})
 
 	var totalProcessed, totalNew, totalUpdated, totalDeleted, totalFailed int
 
@@ -473,7 +474,10 @@ func (w *SyncWorker) processIncrementalSync(ctx context.Context, job models.Sync
 			}
 
 			if err := w.photoRepo.Create(ctx, photo); err != nil {
-				log.Printf("Error creating photo: %v", err)
+				logger.SyncError("photo_create_failed", "Error creating photo", err, map[string]interface{}{
+					"job_id":   jobID.String(),
+					"photo_id": photo.ID.String(),
+				})
 				totalFailed++
 			} else {
 				totalNew++
@@ -500,9 +504,7 @@ func (w *SyncWorker) processIncrementalSync(ctx context.Context, job models.Sync
 	}
 
 	// Save new page token
-	log.Println("│ [3/3] Saving new page token...")
 	w.sharedFolderRepo.Update(ctx, folder.ID, &models.SharedFolder{PageToken: newPageToken})
-	log.Printf("│ ✓ Page token saved: %s", truncateString(newPageToken, 20))
 
 	// Mark job as completed
 	now := time.Now()
@@ -532,17 +534,17 @@ func (w *SyncWorker) processIncrementalSync(ctx context.Context, job models.Sync
 		"isIncremental":  true,
 	})
 
-	// Summary log
-	log.Println("├────────────────────────────────────────────────────────────────")
-	log.Println("│ INCREMENTAL SYNC COMPLETED")
-	log.Println("├────────────────────────────────────────────────────────────────")
-	log.Printf("│ Duration:   %v", duration.Round(time.Millisecond))
-	log.Printf("│ Changes:    %d total", len(changes))
-	log.Printf("│ New:        %d files", totalNew)
-	log.Printf("│ Updated:    %d files", totalUpdated)
-	log.Printf("│ Deleted:    %d files", totalDeleted)
-	log.Printf("│ Failed:     %d files", totalFailed)
-	log.Println("└────────────────────────────────────────────────────────────────")
+	logger.Sync("incremental_sync_completed", "Incremental sync completed", map[string]interface{}{
+		"job_id":        jobID.String(),
+		"folder_id":     folder.ID.String(),
+		"folder_name":   folder.DriveFolderName,
+		"duration_ms":   duration.Milliseconds(),
+		"total_changes": len(changes),
+		"new_files":     totalNew,
+		"updated_files": totalUpdated,
+		"deleted_files": totalDeleted,
+		"failed_files":  totalFailed,
+	})
 }
 
 // processFullSync does a full sync of all images
@@ -550,10 +552,11 @@ func (w *SyncWorker) processFullSync(ctx context.Context, job models.SyncJob, fo
 	jobID := job.ID
 	startTime := time.Now()
 
-	log.Println("┌────────────────────────────────────────────────────────────────")
-	log.Printf("│ FULL SYNC: %s", folder.DriveFolderName)
-	log.Printf("│ Job ID: %s", jobID)
-	log.Println("├────────────────────────────────────────────────────────────────")
+	logger.Sync("full_sync_start", "Starting full sync", map[string]interface{}{
+		"job_id":      jobID.String(),
+		"folder_id":   folder.ID.String(),
+		"folder_name": folder.DriveFolderName,
+	})
 
 	var metadata SyncJobMetadata
 	if job.Metadata != "" {
@@ -567,32 +570,40 @@ func (w *SyncWorker) processFullSync(ctx context.Context, job models.SyncJob, fo
 	totalDeleted := 0
 
 	// Step 1: List ALL folders first for path mapping (optimization)
-	log.Printf("│ [1/5] Listing all folders from Drive...")
 	allFolders, err := w.driveClient.ListAllFoldersRecursive(ctx, srv, folder.DriveFolderID)
 	if err != nil {
-		log.Printf("│ ⚠ Warning: Failed to list folders: %v (will use API per photo)", err)
+		logger.SyncError("list_folders_failed", "Failed to list folders (will use API per photo)", err, map[string]interface{}{
+			"job_id":    jobID.String(),
+			"folder_id": folder.ID.String(),
+		})
 		allFolders = nil
 	} else {
-		log.Printf("│ ✓ Found %d folders", len(allFolders))
+		logger.Sync("folders_listed", "Listed folders from Drive", map[string]interface{}{
+			"job_id":       jobID.String(),
+			"folder_count": len(allFolders),
+		})
 	}
 
 	// Step 2: Build folder path map (O(1) lookup)
 	var folderPathMap map[string]string
 	if allFolders != nil {
 		folderPathMap = w.driveClient.BuildFolderPathMap(allFolders, folder.DriveFolderID)
-		log.Printf("│ ✓ Built path map for %d folders", len(folderPathMap))
 	}
 
 	// Step 3: List all images
-	log.Printf("│ [2/5] Listing images from Drive folder: %s", folder.DriveFolderID)
 	files, err := w.driveClient.ListAllImagesRecursive(ctx, srv, folder.DriveFolderID)
 	if err != nil {
-		log.Printf("│ ❌ Failed to list files: %v", err)
-		log.Println("└────────────────────────────────────────────────────────────────")
+		logger.SyncError("list_images_failed", "Failed to list images", err, map[string]interface{}{
+			"job_id":    jobID.String(),
+			"folder_id": folder.ID.String(),
+		})
 		w.failJob(ctx, jobID, &folder.ID, fmt.Sprintf("Failed to list files: %v", err))
 		return
 	}
-	log.Printf("│ ✓ Found %d images in Drive", len(files))
+	logger.Sync("images_listed", "Listed images from Drive", map[string]interface{}{
+		"job_id":      jobID.String(),
+		"image_count": len(files),
+	})
 
 	driveFileIDs := make([]string, 0, len(files))
 	for _, file := range files {
@@ -604,8 +615,6 @@ func (w *SyncWorker) processFullSync(ctx context.Context, job models.SyncJob, fo
 		TotalItems: totalItems,
 		UpdatedAt:  time.Now(),
 	})
-
-	log.Printf("│ [3/5] Processing %d images...", totalItems)
 
 	startIndex := 0
 	if metadata.LastProcessedID != "" {
@@ -718,7 +727,6 @@ func (w *SyncWorker) processFullSync(ctx context.Context, job models.SyncJob, fo
 				"updatedFiles":   totalUpdated,
 				"failedFiles":    totalFailed,
 			})
-			log.Printf("│ 📊 Progress: %d%% (%d/%d)", currentPercent, totalProcessed, totalItems)
 		}
 
 		if (i+1)%w.checkpointEvery == 0 {
@@ -740,30 +748,35 @@ func (w *SyncWorker) processFullSync(ctx context.Context, job models.SyncJob, fo
 	}
 
 	// Cleanup orphaned photos
-	log.Printf("│ [4/5] Cleaning up orphaned photos...")
 	deletedCount, err := w.photoRepo.DeleteNotInDriveIDsForFolder(ctx, folder.ID, driveFileIDs)
 	if err != nil {
-		log.Printf("│ ⚠ Warning: Failed to cleanup orphaned photos: %v", err)
+		logger.SyncError("cleanup_orphaned_failed", "Failed to cleanup orphaned photos", err, map[string]interface{}{
+			"job_id":    jobID.String(),
+			"folder_id": folder.ID.String(),
+		})
 	} else if deletedCount > 0 {
 		totalDeleted = int(deletedCount)
-		log.Printf("│ ✓ Cleaned up %d orphaned photos", deletedCount)
+		logger.Sync("orphaned_photos_deleted", "Cleaned up orphaned photos", map[string]interface{}{
+			"job_id":        jobID.String(),
+			"folder_id":     folder.ID.String(),
+			"deleted_count": deletedCount,
+		})
 
 		w.broadcastToFolderUsers(ctx, folder.ID, "photos:deleted", map[string]interface{}{
 			"count":  deletedCount,
 			"reason": "cleanup_orphaned",
 		})
-	} else {
-		log.Println("│ ✓ No orphaned photos to clean up")
 	}
 
 	// Get and save page token
-	log.Printf("│ [5/5] Saving page token for future incremental sync...")
 	pageToken, err := w.driveClient.GetStartPageToken(ctx, srv)
 	if err != nil {
-		log.Printf("│ ⚠ Warning: Failed to get page token: %v", err)
+		logger.SyncError("get_page_token_failed", "Failed to get page token", err, map[string]interface{}{
+			"job_id":    jobID.String(),
+			"folder_id": folder.ID.String(),
+		})
 	} else {
 		w.sharedFolderRepo.Update(ctx, folder.ID, &models.SharedFolder{PageToken: pageToken})
-		log.Printf("│ ✓ Page token saved: %s", truncateString(pageToken, 20))
 	}
 
 	// Mark job as completed
@@ -792,20 +805,7 @@ func (w *SyncWorker) processFullSync(ctx context.Context, job models.SyncJob, fo
 		"failedFiles":    totalFailed,
 	})
 
-	// Summary log
-	log.Println("├────────────────────────────────────────────────────────────────")
-	log.Println("│ FULL SYNC COMPLETED")
-	log.Println("├────────────────────────────────────────────────────────────────")
-	log.Printf("│ Duration:   %v", duration.Round(time.Millisecond))
-	log.Printf("│ Processed:  %d files", totalProcessed)
-	log.Printf("│ New:        %d files", totalNew)
-	log.Printf("│ Updated:    %d files", totalUpdated)
-	log.Printf("│ Deleted:    %d files", totalDeleted)
-	log.Printf("│ Failed:     %d files", totalFailed)
-	log.Println("└────────────────────────────────────────────────────────────────")
-
-	// File-based logging
-	logger.Sync("FULL_SYNC_COMPLETED", "Full sync job completed", map[string]interface{}{
+	logger.Sync("full_sync_completed", "Full sync completed", map[string]interface{}{
 		"job_id":          jobID.String(),
 		"folder_id":       folder.ID.String(),
 		"folder_name":     folder.DriveFolderName,
@@ -823,7 +823,6 @@ func (w *SyncWorker) processFullSync(ctx context.Context, job models.SyncJob, fo
 func (w *SyncWorker) broadcastToFolderUsers(ctx context.Context, folderID uuid.UUID, messageType string, data map[string]interface{}) {
 	users, err := w.sharedFolderRepo.GetUsersByFolder(ctx, folderID)
 	if err != nil {
-		log.Printf("Warning: Failed to get users for folder %s: %v", folderID, err)
 		return
 	}
 
@@ -839,11 +838,12 @@ func (w *SyncWorker) flushPhotoBatch(ctx context.Context, photos []*models.Photo
 	}
 
 	if err := w.photoRepo.CreateBatch(ctx, photos); err != nil {
-		log.Printf("Error batch creating %d photos: %v", len(photos), err)
+		logger.SyncError("batch_create_failed", "Error batch creating photos", err, map[string]interface{}{
+			"batch_size": len(photos),
+		})
 		*totalFailed += len(photos)
 	} else {
 		*totalNew += len(photos)
-		log.Printf("Batch created %d photos", len(photos))
 	}
 }
 
