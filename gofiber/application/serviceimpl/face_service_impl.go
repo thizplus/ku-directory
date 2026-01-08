@@ -453,3 +453,107 @@ func (s *FaceServiceImpl) RetryFailedPhotos(ctx context.Context, userID uuid.UUI
 	})
 	return count, nil
 }
+
+// GetPendingPhotos returns photos with pending face status for debugging
+func (s *FaceServiceImpl) GetPendingPhotos(ctx context.Context, userID uuid.UUID, limit int) ([]models.Photo, error) {
+	logger.Face("get_pending_photos", "GetPendingPhotos called", map[string]interface{}{
+		"user_id": userID.String(),
+		"limit":   limit,
+	})
+
+	// Get user's accessible shared folders
+	folders, err := s.sharedFolderRepo.GetFoldersByUser(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user folders: %w", err)
+	}
+
+	if len(folders) == 0 {
+		return []models.Photo{}, nil
+	}
+
+	// Collect folder IDs
+	folderIDs := make([]uuid.UUID, len(folders))
+	for i, f := range folders {
+		folderIDs[i] = f.ID
+	}
+
+	// Get pending photos
+	photos, err := s.photoRepo.GetPendingBySharedFolders(ctx, folderIDs, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get pending photos: %w", err)
+	}
+
+	logger.Face("get_pending_photos_result", "Found pending photos", map[string]interface{}{
+		"user_id": userID.String(),
+		"count":   len(photos),
+	})
+
+	return photos, nil
+}
+
+// ResetPhotosToPending resets specific photos to pending status for reprocessing
+func (s *FaceServiceImpl) ResetPhotosToPending(ctx context.Context, userID uuid.UUID, photoIDs []uuid.UUID) (int64, error) {
+	logger.Face("reset_photos_start", "ResetPhotosToPending called", map[string]interface{}{
+		"user_id":     userID.String(),
+		"photo_count": len(photoIDs),
+	})
+
+	if len(photoIDs) == 0 {
+		return 0, nil
+	}
+
+	// Get user's accessible shared folders
+	folders, err := s.sharedFolderRepo.GetFoldersByUser(ctx, userID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get user folders: %w", err)
+	}
+
+	if len(folders) == 0 {
+		return 0, nil
+	}
+
+	// Collect folder IDs for access validation
+	folderIDMap := make(map[uuid.UUID]bool)
+	for _, f := range folders {
+		folderIDMap[f.ID] = true
+	}
+
+	// Reset each photo
+	var resetCount int64
+	for _, photoID := range photoIDs {
+		photo, err := s.photoRepo.GetByID(ctx, photoID)
+		if err != nil {
+			logger.FaceError("reset_photo_not_found", "Photo not found", err, map[string]interface{}{
+				"photo_id": photoID.String(),
+			})
+			continue
+		}
+
+		// Verify user has access to the photo's folder
+		if !folderIDMap[photo.SharedFolderID] {
+			logger.Face("reset_photo_no_access", "User doesn't have access to photo's folder", map[string]interface{}{
+				"photo_id":  photoID.String(),
+				"folder_id": photo.SharedFolderID.String(),
+			})
+			continue
+		}
+
+		// Reset to pending
+		err = s.photoRepo.UpdateFaceStatus(ctx, photoID, models.FaceStatusPending, 0)
+		if err != nil {
+			logger.FaceError("reset_photo_failed", "Failed to reset photo", err, map[string]interface{}{
+				"photo_id": photoID.String(),
+			})
+			continue
+		}
+
+		resetCount++
+	}
+
+	logger.Face("reset_photos_complete", "Reset photos to pending", map[string]interface{}{
+		"user_id":     userID.String(),
+		"reset_count": resetCount,
+	})
+
+	return resetCount, nil
+}

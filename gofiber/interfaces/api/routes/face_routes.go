@@ -27,4 +27,8 @@ func SetupFaceRoutes(router fiber.Router, h *handlers.Handlers) {
 	// Stats
 	faces.Get("/stats", h.Face.GetProcessingStats)      // Get processing stats
 	faces.Post("/retry", h.Face.RetryFailed)            // Retry failed face processing
+
+	// Admin/Debug endpoints
+	faces.Get("/pending", h.Face.GetPendingPhotos)      // Get pending photos
+	faces.Post("/process", h.Face.ResetPhotosToPending) // Reset photos to pending for reprocessing
 }

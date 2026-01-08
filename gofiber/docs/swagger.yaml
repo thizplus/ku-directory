@@ -110,6 +110,16 @@ definitions:
         description: formal, friendly, news
         type: string
     type: object
+  handlers.ResetPhotosRequest:
+    properties:
+      photo_ids:
+        items:
+          type: string
+        minItems: 1
+        type: array
+    required:
+    - photo_ids
+    type: object
   handlers.SearchByFaceIDRequest:
     properties:
       face_id:
@@ -268,6 +278,26 @@ paths:
       summary: Detect faces in an image
       tags:
       - Faces
+  /api/v1/faces/pending:
+    get:
+      parameters:
+      - default: 50
+        description: Max results
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.Response'
+      security:
+      - BearerAuth: []
+      summary: Get pending photos for face processing
+      tags:
+      - Faces
   /api/v1/faces/photo/{photo_id}:
     get:
       parameters:
@@ -284,6 +314,29 @@ paths:
           schema:
             $ref: '#/definitions/utils.Response'
       summary: Get faces by photo ID
+      tags:
+      - Faces
+  /api/v1/faces/process:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Photo IDs to reset
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.ResetPhotosRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.Response'
+      security:
+      - BearerAuth: []
+      summary: Reset photos to pending status for reprocessing
       tags:
       - Faces
   /api/v1/faces/retry:

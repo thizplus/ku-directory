@@ -220,6 +220,39 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/faces/pending": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Faces"
+                ],
+                "summary": "Get pending photos for face processing",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 50,
+                        "description": "Max results",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/utils.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/faces/photo/{photo_id}": {
             "get": {
                 "produces": [
@@ -236,6 +269,44 @@ const docTemplate = `{
                         "name": "photo_id",
                         "in": "path",
                         "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/utils.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/faces/process": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Faces"
+                ],
+                "summary": "Reset photos to pending status for reprocessing",
+                "parameters": [
+                    {
+                        "description": "Photo IDs to reset",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ResetPhotosRequest"
+                        }
                     }
                 ],
                 "responses": {
@@ -821,6 +892,21 @@ const docTemplate = `{
                 "tone": {
                     "description": "formal, friendly, news",
                     "type": "string"
+                }
+            }
+        },
+        "handlers.ResetPhotosRequest": {
+            "type": "object",
+            "required": [
+                "photo_ids"
+            ],
+            "properties": {
+                "photo_ids": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },

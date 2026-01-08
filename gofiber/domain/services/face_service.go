@@ -71,6 +71,12 @@ type FaceService interface {
 
 	// Retry failed photos
 	RetryFailedPhotos(ctx context.Context, userID uuid.UUID, folderID *uuid.UUID) (int64, error)
+
+	// Get pending photos (for debugging)
+	GetPendingPhotos(ctx context.Context, userID uuid.UUID, limit int) ([]models.Photo, error)
+
+	// Reset photos to pending status (force reprocess)
+	ResetPhotosToPending(ctx context.Context, userID uuid.UUID, photoIDs []uuid.UUID) (int64, error)
 }
 
 // FaceProcessingStats contains face processing statistics

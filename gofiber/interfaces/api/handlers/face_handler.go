@@ -459,6 +459,99 @@ func (h *FaceHandler) GetFaces(c *fiber.Ctx) error {
 	})
 }
 
+// GetPendingPhotos returns photos waiting for face processing
+// @Summary Get pending photos for face processing
+// @Tags Faces
+// @Produce json
+// @Param limit query int false "Max results" default(50)
+// @Success 200 {object} utils.Response
+// @Security BearerAuth
+// @Router /api/v1/faces/pending [get]
+func (h *FaceHandler) GetPendingPhotos(c *fiber.Ctx) error {
+	userCtx, err := utils.GetUserFromContext(c)
+	if err != nil {
+		return utils.UnauthorizedResponse(c, "Not authenticated")
+	}
+
+	limit := c.QueryInt("limit", 50)
+	if limit < 1 || limit > 100 {
+		limit = 50
+	}
+
+	photos, err := h.faceService.GetPendingPhotos(c.Context(), userCtx.ID, limit)
+	if err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to get pending photos", err)
+	}
+
+	// Convert to response format
+	response := make([]fiber.Map, len(photos))
+	for i, p := range photos {
+		response[i] = fiber.Map{
+			"id":                p.ID.String(),
+			"shared_folder_id":  p.SharedFolderID.String(),
+			"drive_file_id":     p.DriveFileID,
+			"file_name":         p.FileName,
+			"drive_folder_path": p.DriveFolderPath,
+			"face_status":       p.FaceStatus,
+			"created_at":        p.CreatedAt,
+		}
+	}
+
+	return utils.SuccessResponse(c, "Pending photos retrieved", fiber.Map{
+		"photos": response,
+		"count":  len(response),
+	})
+}
+
+// ResetPhotosRequest is the request for resetting photos to pending
+type ResetPhotosRequest struct {
+	PhotoIDs []string `json:"photo_ids" validate:"required,min=1"`
+}
+
+// ResetPhotosToPending resets specific photos to pending for reprocessing
+// @Summary Reset photos to pending status for reprocessing
+// @Tags Faces
+// @Accept json
+// @Produce json
+// @Param request body ResetPhotosRequest true "Photo IDs to reset"
+// @Success 200 {object} utils.Response
+// @Security BearerAuth
+// @Router /api/v1/faces/process [post]
+func (h *FaceHandler) ResetPhotosToPending(c *fiber.Ctx) error {
+	userCtx, err := utils.GetUserFromContext(c)
+	if err != nil {
+		return utils.UnauthorizedResponse(c, "Not authenticated")
+	}
+
+	var req ResetPhotosRequest
+	if err := c.BodyParser(&req); err != nil {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "Invalid request body", err)
+	}
+
+	// Convert string IDs to UUIDs
+	photoIDs := make([]uuid.UUID, 0, len(req.PhotoIDs))
+	for _, idStr := range req.PhotoIDs {
+		id, err := uuid.Parse(idStr)
+		if err != nil {
+			continue // Skip invalid IDs
+		}
+		photoIDs = append(photoIDs, id)
+	}
+
+	if len(photoIDs) == 0 {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "No valid photo IDs provided", nil)
+	}
+
+	count, err := h.faceService.ResetPhotosToPending(c.Context(), userCtx.ID, photoIDs)
+	if err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to reset photos", err)
+	}
+
+	return utils.SuccessResponse(c, "Photos reset to pending", fiber.Map{
+		"reset_count": count,
+	})
+}
+
 // isValidImageType checks if the content type is a valid image
 func isValidImageType(contentType string) bool {
 	validTypes := []string{

@@ -178,6 +178,18 @@ func (r *PhotoRepositoryImpl) GetByFaceStatus(ctx context.Context, status models
 	return photos, err
 }
 
+func (r *PhotoRepositoryImpl) GetPendingBySharedFolders(ctx context.Context, folderIDs []uuid.UUID, limit int) ([]models.Photo, error) {
+	var photos []models.Photo
+	err := r.db.WithContext(ctx).
+		Where("shared_folder_id IN ?", folderIDs).
+		Where("face_status = ?", models.FaceStatusPending).
+		Order("created_at ASC").
+		Limit(limit).
+		Find(&photos).Error
+
+	return photos, err
+}
+
 func (r *PhotoRepositoryImpl) Update(ctx context.Context, id uuid.UUID, photo *models.Photo) error {
 	return r.db.WithContext(ctx).Where("id = ?", id).Updates(photo).Error
 }
