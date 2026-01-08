@@ -66,7 +66,9 @@
       "Bash(go list:*)",
       "Bash(python:*)",
       "Bash(go vet:*)",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:github.com)",
+      "Bash(timeout:*)",
+      "WebFetch(domain:raw.githubusercontent.com)"
     ]
   }
 }
