@@ -67,6 +67,19 @@ func main() {
 	// Setup middleware
 	app.Use(middleware.LoggerMiddleware())
 	app.Use(middleware.CorsMiddleware())
+	app.Use(middleware.RateLimiter(&container.GetConfig().RateLimit))
+
+	// Log rate limit config
+	if container.GetConfig().RateLimit.Enabled {
+		logger.Startup("rate_limit_enabled", "Rate limiting enabled", map[string]interface{}{
+			"max_requests":        container.GetConfig().RateLimit.MaxRequests,
+			"window_seconds":      container.GetConfig().RateLimit.WindowSeconds,
+			"auth_max_requests":   container.GetConfig().RateLimit.AuthMaxRequests,
+			"auth_window_seconds": container.GetConfig().RateLimit.AuthWindowSeconds,
+		})
+	} else {
+		logger.StartupWarn("rate_limit_disabled", "Rate limiting is disabled", nil)
+	}
 
 	// Create handlers from services
 	services := container.GetHandlerServices()
@@ -74,7 +87,7 @@ func main() {
 	h := handlers.NewHandlers(services, repos, container.GetConfig())
 
 	// Setup routes
-	routes.SetupRoutes(app, h)
+	routes.SetupRoutes(app, h, container.GetConfig())
 
 	// Setup Swagger - use empty host so it works on any domain
 	docs.SwaggerInfo.Host = ""

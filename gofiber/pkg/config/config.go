@@ -12,6 +12,7 @@ type Config struct {
 	Redis       RedisConfig
 	JWT         JWTConfig
 	Admin       AdminConfig
+	RateLimit   RateLimitConfig
 	Bunny       BunnyConfig
 	Google      GoogleOAuthConfig
 	GoogleDrive GoogleDriveConfig
@@ -21,6 +22,15 @@ type Config struct {
 
 type AdminConfig struct {
 	Token string // Separate admin token for log access (falls back to JWT secret if not set)
+}
+
+type RateLimitConfig struct {
+	Enabled       bool // Enable/disable rate limiting
+	MaxRequests   int  // Max requests per window
+	WindowSeconds int  // Time window in seconds
+	// Stricter limits for sensitive endpoints
+	AuthMaxRequests   int // Max auth requests per window (login, register, etc.)
+	AuthWindowSeconds int // Auth time window in seconds
 }
 
 type AppConfig struct {
@@ -136,6 +146,13 @@ func LoadConfig() (*Config, error) {
 			APIKey: getEnv("GEMINI_API_KEY", ""),
 			Model:  getEnv("GEMINI_MODEL", "gemini-2.0-flash"),
 		},
+		RateLimit: RateLimitConfig{
+			Enabled:           getEnv("RATE_LIMIT_ENABLED", "true") == "true",
+			MaxRequests:       getEnvInt("RATE_LIMIT_MAX_REQUESTS", 100),
+			WindowSeconds:     getEnvInt("RATE_LIMIT_WINDOW_SECONDS", 60),
+			AuthMaxRequests:   getEnvInt("RATE_LIMIT_AUTH_MAX_REQUESTS", 10),
+			AuthWindowSeconds: getEnvInt("RATE_LIMIT_AUTH_WINDOW_SECONDS", 60),
+		},
 	}
 
 	return config, nil
@@ -147,4 +164,16 @@ func getEnv(key, defaultValue string) string {
 		return defaultValue
 	}
 	return value
+}
+
+func getEnvInt(key string, defaultValue int) int {
+	value := os.Getenv(key)
+	if value == "" {
+		return defaultValue
+	}
+	intValue, err := strconv.Atoi(value)
+	if err != nil {
+		return defaultValue
+	}
+	return intValue
 }
