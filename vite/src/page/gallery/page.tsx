@@ -51,7 +51,7 @@ import { useDownloadProgressStore } from "@/stores/download-progress"
 import { useSyncProgressStore } from "@/stores/sync-progress"
 import { getThumbnailUrl } from "@/shared/config/constants"
 import { cn } from "@/lib/utils"
-import type { Photo, SharedFolder } from "@/shared/types"
+import type { Photo } from "@/shared/types"
 
 // View mode type
 type ViewMode = "grid" | "list"
@@ -330,7 +330,7 @@ export default function GalleryPage() {
     !!selectedFolderId,
     currentPath
   )
-  const { data: stats, isLoading: statsLoading } = useFaceStats()
+  const { data: stats } = useFaceStats()
 
   // Mutations
   const triggerSyncMutation = useTriggerFolderSync()
@@ -413,7 +413,7 @@ export default function GalleryPage() {
   const subfolders = getCurrentSubfolders()
 
   // Navigation handlers
-  const handleFolderSelect = (folderId: string, folderName: string) => {
+  const handleFolderSelect = (folderId: string) => {
     setSelectedFolderId(folderId)
     setCurrentPath(undefined)
     setPage(1)
@@ -594,7 +594,7 @@ export default function GalleryPage() {
                 key={folder.id}
                 name={folder.drive_folder_name}
                 photoCount={folder.photo_count}
-                onClick={() => handleFolderSelect(folder.id, folder.drive_folder_name)}
+                onClick={() => handleFolderSelect(folder.id)}
               />
             ))}
           </div>
@@ -605,7 +605,7 @@ export default function GalleryPage() {
                 key={folder.id}
                 name={folder.drive_folder_name}
                 photoCount={folder.photo_count}
-                onClick={() => handleFolderSelect(folder.id, folder.drive_folder_name)}
+                onClick={() => handleFolderSelect(folder.id)}
               />
             ))}
           </div>
