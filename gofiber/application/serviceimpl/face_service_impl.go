@@ -510,16 +510,22 @@ func (s *FaceServiceImpl) GetAllPendingPhotos(ctx context.Context, limit int) ([
 }
 
 // ResetStuckProcessing resets photos stuck in "processing" status back to "pending"
+// Only resets photos that have been stuck for more than 5 minutes
 func (s *FaceServiceImpl) ResetStuckProcessing(ctx context.Context) (int64, error) {
-	logger.Face("reset_stuck_processing", "ResetStuckProcessing called", nil)
+	const stuckThresholdMinutes = 5 // Only reset if processing for more than 5 minutes
 
-	count, err := s.photoRepo.ResetProcessingToPending(ctx)
+	logger.Face("reset_stuck_processing", "ResetStuckProcessing called", map[string]interface{}{
+		"threshold_minutes": stuckThresholdMinutes,
+	})
+
+	count, err := s.photoRepo.ResetStuckProcessingToPending(ctx, stuckThresholdMinutes)
 	if err != nil {
 		return 0, fmt.Errorf("failed to reset stuck processing photos: %w", err)
 	}
 
 	logger.Face("reset_stuck_processing_result", "Reset stuck processing photos", map[string]interface{}{
-		"count": count,
+		"count":             count,
+		"threshold_minutes": stuckThresholdMinutes,
 	})
 
 	return count, nil

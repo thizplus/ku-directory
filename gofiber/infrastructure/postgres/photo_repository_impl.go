@@ -620,10 +620,13 @@ func (r *PhotoRepositoryImpl) ResetFailedToPending(ctx context.Context, folderID
 	return result.RowsAffected, result.Error
 }
 
-// ResetProcessingToPending resets all photos stuck in "processing" status back to "pending"
-func (r *PhotoRepositoryImpl) ResetProcessingToPending(ctx context.Context) (int64, error) {
+// ResetStuckProcessingToPending resets photos stuck in "processing" status for longer than threshold
+func (r *PhotoRepositoryImpl) ResetStuckProcessingToPending(ctx context.Context, stuckThresholdMinutes int) (int64, error) {
+	threshold := time.Now().Add(-time.Duration(stuckThresholdMinutes) * time.Minute)
+
 	result := r.db.WithContext(ctx).Model(&models.Photo{}).
 		Where("face_status = ?", models.FaceStatusProcessing).
+		Where("updated_at < ?", threshold). // Only reset if stuck for longer than threshold
 		Updates(map[string]interface{}{
 			"face_status": models.FaceStatusPending,
 			"updated_at":  time.Now(),
