@@ -286,6 +286,11 @@ paths:
         in: query
         name: limit
         type: integer
+      - default: false
+        description: Get all pending photos globally (admin)
+        in: query
+        name: all
+        type: boolean
       produces:
       - application/json
       responses:
@@ -337,6 +342,20 @@ paths:
       security:
       - BearerAuth: []
       summary: Reset photos to pending status for reprocessing
+      tags:
+      - Faces
+  /api/v1/faces/reset-stuck:
+    post:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.Response'
+      security:
+      - BearerAuth: []
+      summary: Reset stuck processing photos
       tags:
       - Faces
   /api/v1/faces/retry:

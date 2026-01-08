@@ -241,6 +241,13 @@ const docTemplate = `{
                         "description": "Max results",
                         "name": "limit",
                         "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "Get all pending photos globally (admin)",
+                        "name": "all",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -309,6 +316,30 @@ const docTemplate = `{
                         }
                     }
                 ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/utils.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/faces/reset-stuck": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Faces"
+                ],
+                "summary": "Reset stuck processing photos",
                 "responses": {
                     "200": {
                         "description": "OK",
