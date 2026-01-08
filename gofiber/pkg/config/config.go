@@ -11,11 +11,16 @@ type Config struct {
 	Database    DatabaseConfig
 	Redis       RedisConfig
 	JWT         JWTConfig
+	Admin       AdminConfig
 	Bunny       BunnyConfig
 	Google      GoogleOAuthConfig
 	GoogleDrive GoogleDriveConfig
 	FaceAPI     FaceAPIConfig
 	Gemini      GeminiConfig
+}
+
+type AdminConfig struct {
+	Token string // Separate admin token for log access (falls back to JWT secret if not set)
 }
 
 type AppConfig struct {
@@ -102,6 +107,9 @@ func LoadConfig() (*Config, error) {
 		},
 		JWT: JWTConfig{
 			Secret: getEnv("JWT_SECRET", "your-secret-key"),
+		},
+		Admin: AdminConfig{
+			Token: getEnv("ADMIN_TOKEN", ""), // Will fall back to JWT_SECRET in handler if empty
 		},
 		Bunny: BunnyConfig{
 			StorageZone: getEnv("BUNNY_STORAGE_ZONE", ""),

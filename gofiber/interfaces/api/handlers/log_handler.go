@@ -16,10 +16,13 @@ type LogHandler struct {
 
 // NewLogHandler creates a new log handler
 func NewLogHandler(cfg *config.Config) *LogHandler {
-	// Use JWT secret as admin token for simplicity
-	// In production, you might want a separate admin token
+	// Use separate ADMIN_TOKEN if set, otherwise fall back to JWT_SECRET
+	adminToken := cfg.Admin.Token
+	if adminToken == "" {
+		adminToken = cfg.JWT.Secret
+	}
 	return &LogHandler{
-		adminToken: cfg.JWT.Secret,
+		adminToken: adminToken,
 	}
 }
 
