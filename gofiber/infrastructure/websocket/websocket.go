@@ -3,10 +3,11 @@ package websocket
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"sync"
+
 	"github.com/gofiber/websocket/v2"
 	"github.com/google/uuid"
+	"gofiber-template/pkg/logger"
 )
 
 type WebSocketManager struct {
@@ -60,7 +61,7 @@ func (m *WebSocketManager) run() {
 
 			// Close old connection if user already has one (prevent duplicates from StrictMode)
 			if oldConn, exists := m.userConnections[client.UserID]; exists {
-				log.Printf("Closing old connection for user %s (new connection incoming)", client.UserID)
+				logger.WebSocketWarn("connection_replaced", "Closing old connection for user (new connection incoming)", map[string]interface{}{"user_id": client.UserID.String()})
 				// Clean up old connection from clients map
 				if oldClient, ok := m.clients[oldConn]; ok {
 					if oldClient.RoomID != "" && m.rooms[oldClient.RoomID] != nil {
@@ -86,7 +87,7 @@ func (m *WebSocketManager) run() {
 			}
 			m.mutex.Unlock()
 
-			log.Printf("Client connected: UserID=%s, RoomID=%s (1 connection per user)", client.UserID, client.RoomID)
+			logger.WebSocket("client_connected", "Client connected (1 connection per user)", map[string]interface{}{"user_id": client.UserID.String(), "room_id": client.RoomID})
 
 		case conn := <-m.unregister:
 			m.mutex.Lock()
@@ -106,7 +107,7 @@ func (m *WebSocketManager) run() {
 				}
 
 				conn.Close()
-				log.Printf("Client disconnected: UserID=%s, RoomID=%s", client.UserID, client.RoomID)
+				logger.WebSocket("client_disconnected", "Client disconnected", map[string]interface{}{"user_id": client.UserID.String(), "room_id": client.RoomID})
 			}
 			m.mutex.Unlock()
 
@@ -135,7 +136,7 @@ func (m *WebSocketManager) run() {
 
 func (m *WebSocketManager) sendMessage(conn *websocket.Conn, message Message) {
 	if err := conn.WriteJSON(message); err != nil {
-		log.Printf("Error sending message: %v", err)
+		logger.WebSocketError("send_message", "Error sending message", err, map[string]interface{}{"message_type": message.Type})
 		m.unregister <- conn
 	}
 }
@@ -168,7 +169,7 @@ func (m *WebSocketManager) BroadcastToRoom(roomID string, messageType string, da
 }
 
 func (m *WebSocketManager) BroadcastToUser(userID uuid.UUID, messageType string, data interface{}) {
-	log.Printf("📡 Broadcasting to user %s: %s", userID, messageType)
+	logger.WebSocketDebug("broadcast_to_user", "Broadcasting to user", map[string]interface{}{"user_id": userID.String(), "message_type": messageType})
 
 	message := Message{
 		Type: messageType,
@@ -216,7 +217,7 @@ func (m *WebSocketManager) GetTotalClients() int {
 func HandleWebSocketMessage(conn *websocket.Conn, messageType int, data []byte) {
 	var message Message
 	if err := json.Unmarshal(data, &message); err != nil {
-		log.Printf("Error unmarshaling message: %v", err)
+		logger.WebSocketError("unmarshal_message", "Error unmarshaling message", err, nil)
 		return
 	}
 
@@ -283,6 +284,6 @@ func HandleWebSocketMessage(conn *websocket.Conn, messageType int, data []byte) 
 		conn.WriteJSON(response)
 
 	default:
-		log.Printf("Unknown message type: %s", message.Type)
+		logger.WebSocketWarn("unknown_message_type", "Unknown message type received", map[string]interface{}{"message_type": message.Type})
 	}
 }

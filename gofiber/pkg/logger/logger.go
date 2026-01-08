@@ -23,6 +23,7 @@ const (
 	CategoryDrive     Category = "drive"
 	CategoryFace      Category = "face"
 	CategoryStartup   Category = "startup"
+	CategoryScheduler Category = "scheduler"
 )
 
 // Level represents log level
@@ -271,6 +272,44 @@ func WebSocket(action, message string, data map[string]interface{}) {
 	})
 }
 
+// WebSocketError logs WebSocket errors
+func WebSocketError(action, message string, err error, data map[string]interface{}) {
+	errStr := ""
+	if err != nil {
+		errStr = err.Error()
+	}
+	Default().Log(LogEntry{
+		Level:    LevelError,
+		Category: CategoryWebSocket,
+		Action:   action,
+		Message:  message,
+		Error:    errStr,
+		Data:     data,
+	})
+}
+
+// WebSocketWarn logs WebSocket warnings
+func WebSocketWarn(action, message string, data map[string]interface{}) {
+	Default().Log(LogEntry{
+		Level:    LevelWarn,
+		Category: CategoryWebSocket,
+		Action:   action,
+		Message:  message,
+		Data:     data,
+	})
+}
+
+// WebSocketDebug logs WebSocket debug info
+func WebSocketDebug(action, message string, data map[string]interface{}) {
+	Default().Log(LogEntry{
+		Level:    LevelDebug,
+		Category: CategoryWebSocket,
+		Action:   action,
+		Message:  message,
+		Data:     data,
+	})
+}
+
 // Sync logs sync related events
 func Sync(action, message string, data map[string]interface{}) {
 	Default().Log(LogEntry{
@@ -412,6 +451,44 @@ func StartupWarn(action, message string, data map[string]interface{}) {
 	})
 }
 
+// Scheduler logs scheduler related events
+func Scheduler(action, message string, data map[string]interface{}) {
+	Default().Log(LogEntry{
+		Level:    LevelInfo,
+		Category: CategoryScheduler,
+		Action:   action,
+		Message:  message,
+		Data:     data,
+	})
+}
+
+// SchedulerError logs scheduler errors
+func SchedulerError(action, message string, err error, data map[string]interface{}) {
+	errStr := ""
+	if err != nil {
+		errStr = err.Error()
+	}
+	Default().Log(LogEntry{
+		Level:    LevelError,
+		Category: CategoryScheduler,
+		Action:   action,
+		Message:  message,
+		Error:    errStr,
+		Data:     data,
+	})
+}
+
+// SchedulerWarn logs scheduler warnings
+func SchedulerWarn(action, message string, data map[string]interface{}) {
+	Default().Log(LogEntry{
+		Level:    LevelWarn,
+		Category: CategoryScheduler,
+		Action:   action,
+		Message:  message,
+		Data:     data,
+	})
+}
+
 // Info logs info level message
 func Info(category Category, action, message string, data map[string]interface{}) {
 	Default().Log(LogEntry{
@@ -489,7 +566,7 @@ func (l *Logger) ReadLogs(opts ReadLogsOptions) ([]LogEntry, error) {
 	today := time.Now().Format("2006-01-02")
 
 	// Determine which categories to read
-	categories := []Category{CategoryAuth, CategoryWebhook, CategoryWebSocket, CategorySync, CategoryAPI, CategoryDB, CategoryDrive, CategoryFace, CategoryStartup}
+	categories := []Category{CategoryAuth, CategoryWebhook, CategoryWebSocket, CategorySync, CategoryAPI, CategoryDB, CategoryDrive, CategoryFace, CategoryStartup, CategoryScheduler}
 	if opts.Category != "" {
 		categories = []Category{opts.Category}
 	}
@@ -544,6 +621,102 @@ func (l *Logger) ReadLogs(opts ReadLogsOptions) ([]LogEntry, error) {
 	return entries, nil
 }
 
+// ReadLogsByFolderID reads all log entries related to a specific folder
+// Searches in folder_id and drive_folder_id fields across all relevant categories
+func ReadLogsByFolderID(folderID string, days int) ([]LogEntry, error) {
+	return Default().ReadLogsByFolderID(folderID, days)
+}
+
+// ReadLogsByFolderID reads all log entries related to a specific folder
+func (l *Logger) ReadLogsByFolderID(folderID string, days int) ([]LogEntry, error) {
+	if days <= 0 {
+		days = 7 // Default to last 7 days
+	}
+	if days > 30 {
+		days = 30 // Max 30 days
+	}
+
+	var entries []LogEntry
+
+	// Categories that typically contain folder-related logs
+	categories := []Category{CategoryDrive, CategorySync, CategoryWebhook}
+
+	// Search across multiple days
+	for d := 0; d < days; d++ {
+		date := time.Now().AddDate(0, 0, -d).Format("2006-01-02")
+
+		for _, cat := range categories {
+			filename := fmt.Sprintf("%s_%s.log", cat, date)
+			filePath := filepath.Join(l.logDir, filename)
+
+			// Read file if exists
+			data, err := os.ReadFile(filePath)
+			if err != nil {
+				continue // Skip if file doesn't exist
+			}
+
+			// Parse each line as JSON
+			lines := splitLines(string(data))
+			for _, line := range lines {
+				if line == "" {
+					continue
+				}
+
+				var entry LogEntry
+				if err := json.Unmarshal([]byte(line), &entry); err != nil {
+					continue
+				}
+
+				// Check if this entry is related to the folder
+				if matchesFolderID(entry, folderID) {
+					entries = append(entries, entry)
+				}
+			}
+		}
+	}
+
+	// Sort by timestamp ascending (oldest first - to see the timeline)
+	sortEntriesByTimeAsc(entries)
+
+	return entries, nil
+}
+
+// matchesFolderID checks if a log entry is related to a folder ID
+func matchesFolderID(entry LogEntry, folderID string) bool {
+	if entry.Data == nil {
+		return false
+	}
+
+	// Check folder_id field
+	if id, ok := entry.Data["folder_id"].(string); ok && id == folderID {
+		return true
+	}
+
+	// Check drive_folder_id field
+	if id, ok := entry.Data["drive_folder_id"].(string); ok && id == folderID {
+		return true
+	}
+
+	// Also check user_id in case they want to search by user
+	if id, ok := entry.Data["user_id"].(string); ok && id == folderID {
+		return true
+	}
+
+	return false
+}
+
+// sortEntriesByTimeAsc sorts entries by timestamp ascending (oldest first)
+func sortEntriesByTimeAsc(entries []LogEntry) {
+	n := len(entries)
+	for i := 0; i < n-1; i++ {
+		for j := 0; j < n-i-1; j++ {
+			if entries[j].Timestamp.After(entries[j+1].Timestamp) {
+				entries[j], entries[j+1] = entries[j+1], entries[j]
+			}
+		}
+	}
+}
+
 // GetLogDir returns the log directory path
 func GetLogDir() string {
 	return Default().logDir
@@ -573,6 +746,11 @@ func (l *Logger) ListLogFiles() ([]string, error) {
 }
 
 // Helper functions
+
+// GetTypeName returns the type name of an interface
+func GetTypeName(v interface{}) string {
+	return fmt.Sprintf("%T", v)
+}
 
 func splitLines(s string) []string {
 	var lines []string

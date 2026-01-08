@@ -1,11 +1,12 @@
 package middleware
 
 import (
-	"gofiber-template/pkg/utils"
 	"log"
 	"os"
 
 	"github.com/gofiber/fiber/v2"
+	"gofiber-template/pkg/logger"
+	"gofiber-template/pkg/utils"
 )
 
 // Protected middleware validates JWT tokens and sets user context
@@ -30,7 +31,7 @@ func Protected() fiber.Handler {
 		// Validate token and get user context
 		userCtx, err := utils.ValidateTokenStringToUUID(token, jwtSecret)
 		if err != nil {
-			log.Printf("❌ Token validation failed: %v", err)
+			logger.AuthError("token_validation", "Token validation failed", err, nil)
 			switch err {
 			case utils.ErrExpiredToken:
 				return utils.UnauthorizedResponse(c, "Token has expired")
@@ -43,7 +44,7 @@ func Protected() fiber.Handler {
 			}
 		}
 
-		log.Printf("✅ Token validated for user: %s (%s)", userCtx.Email, userCtx.ID)
+		logger.Auth("token_validated", "Token validated successfully", map[string]interface{}{"user_id": userCtx.ID.String(), "email": userCtx.Email})
 
 		// Set user context in fiber locals
 		c.Locals("user", userCtx)
@@ -165,16 +166,16 @@ func ProtectedWithQueryToken() fiber.Handler {
 		authHeader := c.Get("Authorization")
 		if authHeader != "" {
 			token = utils.ExtractTokenFromHeader(authHeader)
-			log.Printf("🔑 Token from header: %d chars", len(token))
+			logger.Debug(logger.CategoryAuth, "token_source", "Token from header", map[string]interface{}{"length": len(token)})
 		}
 
 		// If no header token, try query parameter
 		if token == "" {
 			token = c.Query("token")
 			if token != "" {
-				log.Printf("🔑 Token from query: %d chars", len(token))
+				logger.Debug(logger.CategoryAuth, "token_source", "Token from query", map[string]interface{}{"length": len(token)})
 			} else {
-				log.Printf("❌ No token in header or query")
+				logger.Debug(logger.CategoryAuth, "token_missing", "No token in header or query", nil)
 			}
 		}
 

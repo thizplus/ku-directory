@@ -2,12 +2,12 @@ package utils
 
 import (
 	"errors"
-	"log"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	"gofiber-template/pkg/logger"
 )
 
 var (
@@ -87,23 +87,21 @@ func ExtractTokenFromHeader(authHeader string) string {
 }
 
 func GetUserFromContext(c *fiber.Ctx) (*UserContext, error) {
-	log.Println("🔍 Checking user context...")
+	logger.Debug(logger.CategoryAuth, "get_user_context", "Checking user context", nil)
 
 	user := c.Locals("user")
 
 	if user == nil {
-		log.Println("❌ User not found in context")
+		logger.Warn(logger.CategoryAuth, "get_user_context", "User not found in context", nil)
 		return nil, errors.New("user not found in context")
 	}
 
-	log.Printf("✅ Found user in context: %+v (type: %T)\n", user, user)
-
 	userCtx, ok := user.(*UserContext)
 	if !ok {
-		log.Printf("❌ Invalid user context type: %T\n", user)
+		logger.Warn(logger.CategoryAuth, "get_user_context", "Invalid user context type", map[string]interface{}{"type": logger.GetTypeName(user)})
 		return nil, errors.New("invalid user context type")
 	}
 
-	log.Printf("✅ User context valid: ID=%s, Email=%s\n", userCtx.ID, userCtx.Email)
+	logger.Debug(logger.CategoryAuth, "get_user_context", "User context valid", map[string]interface{}{"user_id": userCtx.ID.String(), "email": userCtx.Email})
 	return userCtx, nil
 }

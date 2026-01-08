@@ -1,12 +1,12 @@
 package websocket
 
 import (
-	"log"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/websocket/v2"
 	"github.com/google/uuid"
-	"gofiber-template/pkg/utils"
 	websocketManager "gofiber-template/infrastructure/websocket"
+	"gofiber-template/pkg/logger"
+	"gofiber-template/pkg/utils"
 )
 
 type WebSocketHandler struct{}
@@ -36,9 +36,9 @@ func (h *WebSocketHandler) HandleWebSocket(c *websocket.Conn) {
 	// If no user context, generate anonymous user ID
 	if userID == uuid.Nil {
 		userID = uuid.New()
-		log.Printf("WebSocket: Anonymous user connected with ID: %s", userID.String())
+		logger.WebSocket("anonymous_connected", "Anonymous user connected", map[string]interface{}{"user_id": userID.String()})
 	} else {
-		log.Printf("WebSocket: Authenticated user connected: %s", userID.String())
+		logger.WebSocket("authenticated_connected", "Authenticated user connected", map[string]interface{}{"user_id": userID.String()})
 	}
 
 	roomID = c.Query("room", "")
@@ -52,7 +52,7 @@ func (h *WebSocketHandler) HandleWebSocket(c *websocket.Conn) {
 	for {
 		messageType, message, err := c.ReadMessage()
 		if err != nil {
-			log.Printf("WebSocket read error: %v", err)
+			logger.WebSocketError("read_message", "WebSocket read error", err, map[string]interface{}{"user_id": userID.String()})
 			break
 		}
 

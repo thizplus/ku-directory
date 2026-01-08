@@ -114,6 +114,103 @@ func (h *LogHandler) GetLogFiles(c *fiber.Ctx) error {
 	})
 }
 
+// GetFolderLogs returns all logs related to a specific folder
+// @Summary Get logs for a specific folder
+// @Tags Admin
+// @Security AdminToken
+// @Param id path string true "Folder ID (UUID or Drive Folder ID)"
+// @Param days query int false "Number of days to search" default(7)
+// @Success 200 {object} map[string]interface{}
+// @Router /admin/logs/folder/{id} [get]
+func (h *LogHandler) GetFolderLogs(c *fiber.Ctx) error {
+	// Check admin token
+	token := c.Get("X-Admin-Token")
+	if token == "" {
+		token = c.Query("token")
+	}
+	if token != h.adminToken {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"success": false,
+			"error":   "Invalid admin token",
+		})
+	}
+
+	// Get folder ID from path
+	folderID := c.Params("id")
+	if folderID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"success": false,
+			"error":   "Folder ID is required",
+		})
+	}
+
+	// Get days parameter
+	days := c.QueryInt("days", 7)
+
+	// Read logs for this folder
+	entries, err := logger.ReadLogsByFolderID(folderID, days)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"success": false,
+			"error":   err.Error(),
+		})
+	}
+
+	// Group entries by action for summary
+	actionSummary := make(map[string]int)
+	var errors []fiber.Map
+	for _, entry := range entries {
+		actionSummary[entry.Action]++
+		if entry.Level == logger.LevelError {
+			errorDetail := fiber.Map{
+				"timestamp": entry.Timestamp,
+				"action":    entry.Action,
+				"message":   entry.Message,
+				"error":     entry.Error,
+			}
+			// Include Google API error details if available
+			if entry.Data != nil {
+				if httpCode, ok := entry.Data["http_status_code"]; ok {
+					errorDetail["http_status_code"] = httpCode
+				}
+				if googleMsg, ok := entry.Data["google_error_message"]; ok {
+					errorDetail["google_error_message"] = googleMsg
+				}
+				if googleDetails, ok := entry.Data["google_error_details"]; ok {
+					errorDetail["google_error_details"] = googleDetails
+				}
+				if rawErr, ok := entry.Data["raw_error"]; ok {
+					errorDetail["raw_error"] = rawErr
+				}
+			}
+			errors = append(errors, errorDetail)
+		}
+	}
+
+	// Determine status
+	status := "success"
+	if len(errors) > 0 {
+		status = "has_errors"
+	}
+	if len(entries) == 0 {
+		status = "no_logs_found"
+	}
+
+	return c.JSON(fiber.Map{
+		"success": true,
+		"data": fiber.Map{
+			"folder_id":      folderID,
+			"days_searched":  days,
+			"status":         status,
+			"total_entries":  len(entries),
+			"error_count":    len(errors),
+			"errors":         errors,
+			"action_summary": actionSummary,
+			"timeline":       entries,
+		},
+	})
+}
+
 // GetLogStats returns log statistics
 // @Summary Get log statistics
 // @Tags Admin

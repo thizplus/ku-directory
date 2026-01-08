@@ -1,8 +1,8 @@
 package middleware
 
 import (
-	"log"
 	"github.com/gofiber/fiber/v2"
+	"gofiber-template/pkg/logger"
 	"gofiber-template/pkg/utils"
 )
 
@@ -14,7 +14,7 @@ func ErrorHandler() fiber.ErrorHandler {
 			code = e.Code
 		}
 
-		log.Printf("Error: %v", err)
+		logger.Error(logger.CategoryAPI, "error_handler", "Request error occurred", err, map[string]interface{}{"status_code": code, "path": c.Path(), "method": c.Method()})
 
 		return utils.ErrorResponse(c, code, "An error occurred", err)
 	}

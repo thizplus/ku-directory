@@ -13,4 +13,5 @@ func SetupLogRoutes(router fiber.Router, h *handlers.Handlers) {
 	admin.Get("/logs", h.Log.GetLogs)
 	admin.Get("/logs/files", h.Log.GetLogFiles)
 	admin.Get("/logs/stats", h.Log.GetLogStats)
+	admin.Get("/logs/folder/:id", h.Log.GetFolderLogs) // Get logs by folder ID
 }

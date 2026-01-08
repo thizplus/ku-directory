@@ -2,11 +2,11 @@ package scheduler
 
 import (
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
 	"github.com/go-co-op/gocron"
+	"gofiber-template/pkg/logger"
 )
 
 type EventScheduler interface {
@@ -51,13 +51,13 @@ func (s *GocronScheduler) Start() {
 	defer s.mu.Unlock()
 
 	if s.running {
-		log.Println("Scheduler is already running")
+		logger.SchedulerWarn("start", "Scheduler is already running", nil)
 		return
 	}
 
 	s.scheduler.StartAsync()
 	s.running = true
-	log.Println("Event scheduler started")
+	logger.Scheduler("started", "Event scheduler started", nil)
 }
 
 func (s *GocronScheduler) Stop() {
@@ -65,13 +65,13 @@ func (s *GocronScheduler) Stop() {
 	defer s.mu.Unlock()
 
 	if !s.running {
-		log.Println("Scheduler is not running")
+		logger.SchedulerWarn("stop", "Scheduler is not running", nil)
 		return
 	}
 
 	s.scheduler.Stop()
 	s.running = false
-	log.Println("Event scheduler stopped")
+	logger.Scheduler("stopped", "Event scheduler stopped", nil)
 }
 
 func (s *GocronScheduler) IsRunning() bool {
@@ -90,7 +90,7 @@ func (s *GocronScheduler) AddJob(id, cronExpr string, task func()) error {
 
 	job, err := s.scheduler.Cron(cronExpr).Do(func() {
 		now := time.Now()
-		log.Printf("Executing job: %s at %s", id, now.Format(time.RFC3339))
+		logger.Scheduler("job_executing", "Executing job", map[string]interface{}{"job_id": id, "time": now.Format(time.RFC3339)})
 
 		// Update last run time
 		s.mu.Lock()
@@ -121,7 +121,7 @@ func (s *GocronScheduler) AddJob(id, cronExpr string, task func()) error {
 		NextRun:  &nextRun,
 	}
 
-	log.Printf("Job added: ID=%s, CronExpr=%s, NextRun=%s", id, cronExpr, nextRun.Format(time.RFC3339))
+	logger.Scheduler("job_added", "Job added", map[string]interface{}{"job_id": id, "cron_expr": cronExpr, "next_run": nextRun.Format(time.RFC3339)})
 	return nil
 }
 
@@ -139,7 +139,7 @@ func (s *GocronScheduler) RemoveJob(id string) error {
 	}
 
 	delete(s.jobs, id)
-	log.Printf("Job removed: ID=%s", id)
+	logger.Scheduler("job_removed", "Job removed", map[string]interface{}{"job_id": id})
 	return nil
 }
 

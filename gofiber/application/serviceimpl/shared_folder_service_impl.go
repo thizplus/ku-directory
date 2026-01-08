@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"google.golang.org/api/googleapi"
 
 	"gofiber-template/domain/models"
 	"gofiber-template/domain/repositories"
@@ -53,6 +54,115 @@ func wrapGoogleAuthError(err error) error {
 		}
 	}
 	return err
+}
+
+// GoogleAPIErrorDetails contains detailed information from Google API errors
+type GoogleAPIErrorDetails struct {
+	HTTPStatusCode int                    `json:"http_status_code"`
+	ErrorMessage   string                 `json:"error_message"`
+	ErrorBody      string                 `json:"error_body,omitempty"`
+	ErrorDetails   []googleapi.ErrorItem  `json:"error_details,omitempty"`
+	RawError       string                 `json:"raw_error"`
+}
+
+// parseGoogleAPIError extracts detailed error information from Google API errors
+func parseGoogleAPIError(err error) *GoogleAPIErrorDetails {
+	if err == nil {
+		return nil
+	}
+
+	details := &GoogleAPIErrorDetails{
+		RawError: err.Error(),
+	}
+
+	// Try to extract googleapi.Error details
+	if apiErr, ok := err.(*googleapi.Error); ok {
+		details.HTTPStatusCode = apiErr.Code
+		details.ErrorMessage = apiErr.Message
+		details.ErrorBody = apiErr.Body
+		details.ErrorDetails = apiErr.Errors
+	} else {
+		// Try to find wrapped googleapi.Error
+		errStr := err.Error()
+		if strings.Contains(errStr, "googleapi:") {
+			details.ErrorMessage = errStr
+		}
+	}
+
+	return details
+}
+
+// logGoogleAPIError logs detailed Google API error information
+func logGoogleAPIError(action, message string, err error, extraData map[string]interface{}) {
+	details := parseGoogleAPIError(err)
+
+	data := map[string]interface{}{
+		"raw_error": details.RawError,
+	}
+
+	if details.HTTPStatusCode != 0 {
+		data["http_status_code"] = details.HTTPStatusCode
+	}
+	if details.ErrorMessage != "" {
+		data["google_error_message"] = details.ErrorMessage
+	}
+	if details.ErrorBody != "" {
+		data["google_error_body"] = details.ErrorBody
+	}
+	if len(details.ErrorDetails) > 0 {
+		// Convert error details to readable format
+		errorItems := make([]map[string]string, len(details.ErrorDetails))
+		for i, item := range details.ErrorDetails {
+			errorItems[i] = map[string]string{
+				"reason":  item.Reason,
+				"message": item.Message,
+			}
+		}
+		data["google_error_details"] = errorItems
+	}
+
+	// Merge extra data
+	for k, v := range extraData {
+		data[k] = v
+	}
+
+	logger.DriveError(action, message, err, data)
+}
+
+// logGoogleWebhookError logs detailed Google API error information for webhook operations
+func logGoogleWebhookError(action, message string, err error, extraData map[string]interface{}) {
+	details := parseGoogleAPIError(err)
+
+	data := map[string]interface{}{
+		"raw_error": details.RawError,
+	}
+
+	if details.HTTPStatusCode != 0 {
+		data["http_status_code"] = details.HTTPStatusCode
+	}
+	if details.ErrorMessage != "" {
+		data["google_error_message"] = details.ErrorMessage
+	}
+	if details.ErrorBody != "" {
+		data["google_error_body"] = details.ErrorBody
+	}
+	if len(details.ErrorDetails) > 0 {
+		errorItems := make([]map[string]string, len(details.ErrorDetails))
+		for i, item := range details.ErrorDetails {
+			errorItems[i] = map[string]string{
+				"reason":  item.Reason,
+				"message": item.Message,
+			}
+		}
+		data["google_error_details"] = errorItems
+	}
+
+	// Merge extra data
+	for k, v := range extraData {
+		data[k] = v
+	}
+
+	logger.WebhookError(action, message, err, data)
 }
 
 type SharedFolderServiceImpl struct {
@@ -151,9 +261,11 @@ func (s *SharedFolderServiceImpl) AddFolder(ctx context.Context, userID uuid.UUI
 
 	srv, err := s.driveClient.GetDriveServiceWithResourceKey(ctx, accessToken, refreshToken, time.Time{}, driveFolderID, resourceKey)
 	if err != nil {
-		logger.DriveError("get_drive_service_failed", "Failed to get drive service", err, map[string]interface{}{
-			"user_id":         userID.String(),
-			"drive_folder_id": driveFolderID,
+		logGoogleAPIError("get_drive_service_failed", "Failed to get drive service", err, map[string]interface{}{
+			"user_id":          userID.String(),
+			"drive_folder_id":  driveFolderID,
+			"has_access_token": accessToken != "",
+			"has_resource_key": resourceKey != "",
 		})
 		return nil, wrapGoogleAuthError(fmt.Errorf("failed to get drive service: %w", err))
 	}
@@ -162,19 +274,31 @@ func (s *SharedFolderServiceImpl) AddFolder(ctx context.Context, userID uuid.UUI
 		"drive_folder_id": driveFolderID,
 	})
 
-	folderMeta, err := srv.Files.Get(driveFolderID).Fields("id, name").Do()
+	folderMeta, err := srv.Files.Get(driveFolderID).Fields("id, name, mimeType, owners, shared, capabilities").Do()
 	if err != nil {
-		logger.DriveError("get_metadata_failed", "Failed to get folder metadata from Google Drive", err, map[string]interface{}{
-			"user_id":         userID.String(),
-			"drive_folder_id": driveFolderID,
+		logGoogleAPIError("get_metadata_failed", "Failed to get folder metadata from Google Drive", err, map[string]interface{}{
+			"user_id":          userID.String(),
+			"drive_folder_id":  driveFolderID,
+			"has_resource_key": resourceKey != "",
 		})
 		return nil, wrapGoogleAuthError(fmt.Errorf("failed to get folder metadata: %w", err))
 	}
 
-	logger.Drive("folder_metadata_received", "Got folder metadata from Google Drive", map[string]interface{}{
+	// Log successful response with more details
+	folderDetails := map[string]interface{}{
 		"drive_folder_id":   folderMeta.Id,
 		"drive_folder_name": folderMeta.Name,
-	})
+		"mime_type":         folderMeta.MimeType,
+		"shared":            folderMeta.Shared,
+	}
+	if len(folderMeta.Owners) > 0 {
+		folderDetails["owner_email"] = folderMeta.Owners[0].EmailAddress
+	}
+	if folderMeta.Capabilities != nil {
+		folderDetails["can_read_revisions"] = folderMeta.Capabilities.CanReadRevisions
+		folderDetails["can_list_children"] = folderMeta.Capabilities.CanListChildren
+	}
+	logger.Drive("folder_metadata_received", "Got folder metadata from Google Drive", folderDetails)
 
 	// Generate webhook token
 	webhookToken := uuid.New().String()
@@ -257,8 +381,9 @@ func (s *SharedFolderServiceImpl) AddFolder(ctx context.Context, userID uuid.UUI
 
 		startPageToken, err := s.driveClient.GetStartPageToken(webhookCtx, srv)
 		if err != nil {
-			logger.WebhookError("get_page_token_failed", "Failed to get start page token", err, map[string]interface{}{
-				"folder_id": folder.ID.String(),
+			logGoogleWebhookError("get_page_token_failed", "Failed to get start page token", err, map[string]interface{}{
+				"folder_id":   folder.ID.String(),
+				"folder_name": folder.DriveFolderName,
 			})
 			return
 		}
@@ -271,9 +396,10 @@ func (s *SharedFolderServiceImpl) AddFolder(ctx context.Context, userID uuid.UUI
 		channelID := uuid.New().String()
 		channel, err := s.driveClient.WatchChanges(webhookCtx, srv, channelID, webhookToken, startPageToken)
 		if err != nil {
-			logger.WebhookError("register_webhook_failed", "Failed to register webhook", err, map[string]interface{}{
-				"folder_id":  folder.ID.String(),
-				"channel_id": channelID,
+			logGoogleWebhookError("register_webhook_failed", "Failed to register webhook", err, map[string]interface{}{
+				"folder_id":   folder.ID.String(),
+				"folder_name": folder.DriveFolderName,
+				"channel_id":  channelID,
 			})
 			return
 		}
