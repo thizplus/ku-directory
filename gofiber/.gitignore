@@ -23,6 +23,8 @@ vendor/
 .env.development
 .env.test
 .env.production
+.env.backup
+*.env.bak
 
 # Logs
 *.log
