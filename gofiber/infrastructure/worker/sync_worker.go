@@ -278,7 +278,9 @@ func (w *SyncWorker) processJob(job models.SyncJob) {
 	w.updateFolderMetadata(ctx, folder, srv)
 
 	// Decide: Incremental sync or Full sync
-	if folder.PageToken != "" {
+	// Use LastSyncedAt to determine if this is first sync (not PageToken, which may be set by webhook registration)
+	isFirstSync := folder.LastSyncedAt == nil
+	if !isFirstSync && folder.PageToken != "" {
 		logger.Sync("sync_mode", "Starting incremental sync", map[string]interface{}{
 			"job_id":      jobID.String(),
 			"folder_id":   folder.ID.String(),
@@ -292,6 +294,7 @@ func (w *SyncWorker) processJob(job models.SyncJob) {
 			"folder_id":   folder.ID.String(),
 			"folder_name": folder.DriveFolderName,
 			"mode":        "full",
+			"reason":      map[bool]string{true: "first_sync", false: "no_page_token"}[isFirstSync],
 		})
 		w.processFullSync(ctx, job, folder, srv)
 	}
