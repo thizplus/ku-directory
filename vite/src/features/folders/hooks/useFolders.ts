@@ -3,10 +3,22 @@
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import axios from 'axios'
 import { foldersService } from '@/services'
 import { CACHE_TIMES } from '@/shared/config/constants'
-import { getErrorMessage } from '@/shared/lib/api'
+import { getErrorMessage, ERROR_CODES, type ApiResponse } from '@/shared/lib/api'
 import type { SharedFolder, SharedFolderListData, PhotoListData } from '@/shared/types'
+
+/**
+ * Check if error is Google token expired (handled by GoogleTokenAlert)
+ */
+function isGoogleTokenError(error: unknown): boolean {
+  if (axios.isAxiosError(error)) {
+    const errorCode = (error.response?.data as ApiResponse<unknown>)?.error_code
+    return errorCode === ERROR_CODES.GOOGLE_TOKEN_EXPIRED
+  }
+  return false
+}
 
 /**
  * Query Keys
@@ -76,6 +88,8 @@ export function useAddFolder() {
       toast.success(`เพิ่มโฟลเดอร์ "${folder.drive_folder_name}" สำเร็จ`)
     },
     onError: (error) => {
+      // ไม่แสดง toast ถ้าเป็น Google token expired (GoogleTokenAlert จัดการแล้ว)
+      if (isGoogleTokenError(error)) return
       toast.error(`เพิ่มโฟลเดอร์ไม่สำเร็จ: ${getErrorMessage(error)}`)
     },
   })
@@ -100,6 +114,7 @@ export function useRemoveFolder() {
       toast.success('ออกจากโฟลเดอร์สำเร็จ')
     },
     onError: (error) => {
+      if (isGoogleTokenError(error)) return
       toast.error(`ออกจากโฟลเดอร์ไม่สำเร็จ: ${getErrorMessage(error)}`)
     },
   })
@@ -125,6 +140,7 @@ export function useTriggerFolderSync() {
       toast.success('เริ่ม Sync โฟลเดอร์แล้ว')
     },
     onError: (error) => {
+      if (isGoogleTokenError(error)) return
       toast.error(`Sync ไม่สำเร็จ: ${getErrorMessage(error)}`)
     },
   })

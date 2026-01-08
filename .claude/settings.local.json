@@ -68,7 +68,8 @@
       "Bash(go vet:*)",
       "WebFetch(domain:github.com)",
       "Bash(timeout:*)",
-      "WebFetch(domain:raw.githubusercontent.com)"
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:api.dangku.online)"
     ]
   }
 }
