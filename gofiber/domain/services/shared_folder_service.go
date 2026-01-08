@@ -9,7 +9,7 @@ import (
 
 type SharedFolderService interface {
 	// Folder management
-	AddFolder(ctx context.Context, userID uuid.UUID, driveFolderID string, accessToken, refreshToken string) (*models.SharedFolder, error)
+	AddFolder(ctx context.Context, userID uuid.UUID, driveFolderID, resourceKey string, accessToken, refreshToken string) (*models.SharedFolder, error)
 	GetUserFolders(ctx context.Context, userID uuid.UUID) ([]models.SharedFolder, error)
 	GetFolderByID(ctx context.Context, userID uuid.UUID, folderID uuid.UUID) (*models.SharedFolder, error)
 	RemoveUserAccess(ctx context.Context, userID uuid.UUID, folderID uuid.UUID) error

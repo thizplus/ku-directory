@@ -55,6 +55,21 @@ type TokenInfo struct {
 	Expiry       time.Time
 }
 
+// resourceKeyTransport wraps an http.RoundTripper to add resource key header
+type resourceKeyTransport struct {
+	base        http.RoundTripper
+	folderID    string
+	resourceKey string
+}
+
+// RoundTrip adds the X-Goog-Drive-Resource-Keys header for older shared folders
+func (t *resourceKeyTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if t.resourceKey != "" && t.folderID != "" {
+		req.Header.Set("X-Goog-Drive-Resource-Keys", fmt.Sprintf("%s/%s", t.folderID, t.resourceKey))
+	}
+	return t.base.RoundTrip(req)
+}
+
 // NewDriveClient creates a new Google Drive client
 func NewDriveClient(cfg config.GoogleDriveConfig) *DriveClient {
 	oauthConfig := &oauth2.Config{
@@ -117,6 +132,12 @@ func (c *DriveClient) RefreshToken(ctx context.Context, refreshToken string) (*T
 
 // GetDriveService creates a Drive service with the given tokens
 func (c *DriveClient) GetDriveService(ctx context.Context, accessToken, refreshToken string, expiry time.Time) (*drive.Service, error) {
+	return c.GetDriveServiceWithResourceKey(ctx, accessToken, refreshToken, expiry, "", "")
+}
+
+// GetDriveServiceWithResourceKey creates a Drive service with optional resource key support
+// for older shared folders (pre-2021) that require the X-Goog-Drive-Resource-Keys header
+func (c *DriveClient) GetDriveServiceWithResourceKey(ctx context.Context, accessToken, refreshToken string, expiry time.Time, folderID, resourceKey string) (*drive.Service, error) {
 	token := &oauth2.Token{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
@@ -125,6 +146,16 @@ func (c *DriveClient) GetDriveService(ctx context.Context, accessToken, refreshT
 	}
 
 	client := c.config.Client(ctx, token)
+
+	// Wrap with resourceKey transport if resourceKey is provided
+	if resourceKey != "" && folderID != "" {
+		client.Transport = &resourceKeyTransport{
+			base:        client.Transport,
+			folderID:    folderID,
+			resourceKey: resourceKey,
+		}
+	}
+
 	srv, err := drive.NewService(ctx, option.WithHTTPClient(client))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create drive service: %w", err)

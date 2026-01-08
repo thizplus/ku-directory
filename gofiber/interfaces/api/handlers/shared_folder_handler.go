@@ -189,7 +189,7 @@ func (h *SharedFolderHandler) AddFolder(c *fiber.Ctx) error {
 		})
 	}
 
-	folder, err := h.sharedFolderService.AddFolder(c.Context(), userCtx.ID, req.DriveFolderID, user.DriveAccessToken, user.DriveRefreshToken)
+	folder, err := h.sharedFolderService.AddFolder(c.Context(), userCtx.ID, req.DriveFolderID, req.DriveResourceKey, user.DriveAccessToken, user.DriveRefreshToken)
 	if err != nil {
 		// Check if it's a Google token error
 		var tokenErr *serviceimpl.GoogleTokenError

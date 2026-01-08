@@ -16,10 +16,11 @@ const (
 
 // SharedFolder represents a Google Drive folder that is synced by the server
 type SharedFolder struct {
-	ID              uuid.UUID `gorm:"primaryKey;type:uuid;default:gen_random_uuid()"`
-	DriveFolderID   string    `gorm:"uniqueIndex;not null"` // Google Drive folder ID
-	DriveFolderName string    `gorm:"not null"`             // Folder name
-	DriveFolderPath string    `gorm:"not null"`             // Full path (for display)
+	ID               uuid.UUID `gorm:"primaryKey;type:uuid;default:gen_random_uuid()"`
+	DriveFolderID    string    `gorm:"uniqueIndex;not null"` // Google Drive folder ID
+	DriveFolderName  string    `gorm:"not null"`             // Folder name
+	DriveFolderPath  string    `gorm:"not null"`             // Full path (for display)
+	DriveResourceKey string    // Resource key for older shared folders (pre-2021)
 
 	// Webhook info
 	WebhookChannelID  string     // Channel ID from Google

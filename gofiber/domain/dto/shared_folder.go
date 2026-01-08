@@ -31,7 +31,8 @@ type SharedFolderResponse struct {
 
 // AddFolderRequest is the request for adding a new folder
 type AddFolderRequest struct {
-	DriveFolderID string `json:"drive_folder_id" validate:"required"`
+	DriveFolderID    string `json:"drive_folder_id" validate:"required"`
+	DriveResourceKey string `json:"drive_resource_key,omitempty"` // For older shared folders (pre-2021)
 }
 
 // SharedFolderListResponse is the response for listing folders

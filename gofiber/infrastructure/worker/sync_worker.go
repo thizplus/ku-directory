@@ -259,7 +259,7 @@ func (w *SyncWorker) processJob(job models.SyncJob) {
 		expiry = *folder.DriveTokenExpiry
 	}
 
-	srv, err := w.driveClient.GetDriveService(ctx, folder.DriveAccessToken, folder.DriveRefreshToken, expiry)
+	srv, err := w.driveClient.GetDriveServiceWithResourceKey(ctx, folder.DriveAccessToken, folder.DriveRefreshToken, expiry, folder.DriveFolderID, folder.DriveResourceKey)
 	if err != nil {
 		logger.SyncError("get_drive_service_failed", "Failed to get drive service", err, map[string]interface{}{
 			"job_id":    jobID.String(),

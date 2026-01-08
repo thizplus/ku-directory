@@ -81,11 +81,12 @@ func NewSharedFolderService(
 
 // AddFolder adds a new shared folder or joins an existing one
 // Returns immediately after creating sync job - photos sync in background via WebSocket updates
-func (s *SharedFolderServiceImpl) AddFolder(ctx context.Context, userID uuid.UUID, driveFolderID string, accessToken, refreshToken string) (*models.SharedFolder, error) {
+func (s *SharedFolderServiceImpl) AddFolder(ctx context.Context, userID uuid.UUID, driveFolderID, resourceKey string, accessToken, refreshToken string) (*models.SharedFolder, error) {
 	logger.Drive("add_folder_start", "Starting add folder process", map[string]interface{}{
-		"user_id":         userID.String(),
-		"drive_folder_id": driveFolderID,
-		"has_token":       accessToken != "",
+		"user_id":          userID.String(),
+		"drive_folder_id":  driveFolderID,
+		"has_resource_key": resourceKey != "",
+		"has_token":        accessToken != "",
 	})
 
 	// Check if folder already exists
@@ -145,9 +146,10 @@ func (s *SharedFolderServiceImpl) AddFolder(ctx context.Context, userID uuid.UUI
 	logger.Drive("get_drive_service", "Getting Google Drive service", map[string]interface{}{
 		"has_access_token":  accessToken != "",
 		"has_refresh_token": refreshToken != "",
+		"has_resource_key":  resourceKey != "",
 	})
 
-	srv, err := s.driveClient.GetDriveService(ctx, accessToken, refreshToken, time.Time{})
+	srv, err := s.driveClient.GetDriveServiceWithResourceKey(ctx, accessToken, refreshToken, time.Time{}, driveFolderID, resourceKey)
 	if err != nil {
 		logger.DriveError("get_drive_service_failed", "Failed to get drive service", err, map[string]interface{}{
 			"user_id":         userID.String(),
@@ -183,6 +185,7 @@ func (s *SharedFolderServiceImpl) AddFolder(ctx context.Context, userID uuid.UUI
 		DriveFolderID:     driveFolderID,
 		DriveFolderName:   folderMeta.Name,
 		DriveFolderPath:   folderMeta.Name,
+		DriveResourceKey:  resourceKey, // For older shared folders (pre-2021)
 		SyncStatus:        models.SyncStatusSyncing, // Mark as syncing - will update via WebSocket
 		DriveAccessToken:  accessToken,
 		DriveRefreshToken: refreshToken,
