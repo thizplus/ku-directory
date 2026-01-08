@@ -107,16 +107,8 @@ func main() {
 	routes.SetupRoutes(app, h, healthHandler, container.GetConfig())
 
 	// Setup Scalar API Documentation (modern alternative to Swagger UI)
-	// Custom CSS for Google Fonts (Google Sans + Roboto)
-	customCSS := template.CSS(`
-		@import url('https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&display=swap');
-		@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap');
-		@import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500&display=swap');
-		:root {
-			--scalar-font: 'Roboto', 'Google Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-			--scalar-font-code: 'Roboto Mono', monospace;
-		}
-	`)
+	// Custom CSS for Google Fonts (Roboto)
+	customCSS := template.CSS(`@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap'); @import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500&display=swap'); :root { --scalar-font: 'Roboto', -apple-system, BlinkMacSystemFont, sans-serif; --scalar-font-code: 'Roboto Mono', monospace; }`)
 	app.Get("/docs/*", scalar.New(scalar.Config{
 		Title:       "KU Directory API",
 		Theme:       scalar.ThemeDeepSpace,
