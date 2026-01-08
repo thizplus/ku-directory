@@ -21,6 +21,7 @@ type SharedFolder struct {
 	DriveFolderName  string    `gorm:"not null"`             // Folder name
 	DriveFolderPath  string    `gorm:"not null"`             // Full path (for display)
 	DriveResourceKey string    // Resource key for older shared folders (pre-2021)
+	Description      string    // Folder description from Google Drive
 
 	// Webhook info
 	WebhookChannelID  string     // Channel ID from Google

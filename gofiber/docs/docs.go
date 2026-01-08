@@ -878,6 +878,9 @@ const docTemplate = `{
                 "created_at": {
                     "type": "string"
                 },
+                "description": {
+                    "type": "string"
+                },
                 "drive_folder_id": {
                     "type": "string"
                 },

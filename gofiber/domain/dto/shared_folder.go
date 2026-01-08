@@ -20,6 +20,7 @@ type SharedFolderResponse struct {
 	DriveFolderID   string          `json:"drive_folder_id"`
 	DriveFolderName string          `json:"drive_folder_name"`
 	DriveFolderPath string          `json:"drive_folder_path"`
+	Description     string          `json:"description,omitempty"`
 	SyncStatus      string          `json:"sync_status"`
 	LastSyncAt      *time.Time      `json:"last_sync_at,omitempty"`
 	LastSyncError   string          `json:"last_sync_error,omitempty"`
@@ -50,6 +51,7 @@ func SharedFolderToResponse(folder *models.SharedFolder, photoCount, userCount i
 		DriveFolderID:   folder.DriveFolderID,
 		DriveFolderName: folder.DriveFolderName,
 		DriveFolderPath: folder.DriveFolderPath,
+		Description:     folder.Description,
 		SyncStatus:      string(folder.SyncStatus),
 		LastSyncAt:      folder.LastSyncedAt,
 		LastSyncError:   folder.LastError,

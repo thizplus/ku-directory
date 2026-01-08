@@ -274,6 +274,9 @@ func (w *SyncWorker) processJob(job models.SyncJob) {
 		"folder_id": folder.ID.String(),
 	})
 
+	// Fetch and update folder metadata (name, description)
+	w.updateFolderMetadata(ctx, folder, srv)
+
 	// Decide: Incremental sync or Full sync
 	if folder.PageToken != "" {
 		logger.Sync("sync_mode", "Starting incremental sync", map[string]interface{}{
@@ -303,6 +306,65 @@ func truncateString(s string, maxLen int) string {
 		return s[:maxLen]
 	}
 	return s[:maxLen-3] + "..."
+}
+
+// updateFolderMetadata fetches and updates folder metadata (name, description) from Google Drive
+func (w *SyncWorker) updateFolderMetadata(ctx context.Context, folder *models.SharedFolder, srv *drive.Service) {
+	// Fetch folder metadata from Google Drive
+	folderMeta, err := srv.Files.Get(folder.DriveFolderID).Fields("id, name, description").Do()
+	if err != nil {
+		logger.SyncError("fetch_folder_metadata_failed", "Failed to fetch folder metadata", err, map[string]interface{}{
+			"folder_id":       folder.ID.String(),
+			"drive_folder_id": folder.DriveFolderID,
+		})
+		return
+	}
+
+	// Check if name or description changed
+	needsUpdate := false
+	updates := &models.SharedFolder{}
+
+	if folderMeta.Name != folder.DriveFolderName {
+		updates.DriveFolderName = folderMeta.Name
+		updates.DriveFolderPath = folderMeta.Name
+		needsUpdate = true
+		logger.Sync("folder_name_changed", "Folder name changed", map[string]interface{}{
+			"folder_id": folder.ID.String(),
+			"old_name":  folder.DriveFolderName,
+			"new_name":  folderMeta.Name,
+		})
+	}
+
+	if folderMeta.Description != folder.Description {
+		updates.Description = folderMeta.Description
+		needsUpdate = true
+		logger.Sync("folder_description_changed", "Folder description changed", map[string]interface{}{
+			"folder_id":       folder.ID.String(),
+			"old_description": truncateString(folder.Description, 100),
+			"new_description": truncateString(folderMeta.Description, 100),
+		})
+	}
+
+	// Update folder if needed
+	if needsUpdate {
+		if err := w.sharedFolderRepo.Update(ctx, folder.ID, updates); err != nil {
+			logger.SyncError("update_folder_metadata_failed", "Failed to update folder metadata", err, map[string]interface{}{
+				"folder_id": folder.ID.String(),
+			})
+		} else {
+			// Update local folder object
+			if updates.DriveFolderName != "" {
+				folder.DriveFolderName = updates.DriveFolderName
+				folder.DriveFolderPath = updates.DriveFolderPath
+			}
+			if updates.Description != "" || folderMeta.Description == "" {
+				folder.Description = folderMeta.Description
+			}
+			logger.Sync("folder_metadata_updated", "Folder metadata updated", map[string]interface{}{
+				"folder_id": folder.ID.String(),
+			})
+		}
+	}
 }
 
 // processIncrementalSync processes changes since last sync

@@ -63,6 +63,8 @@ definitions:
         type: array
       created_at:
         type: string
+      description:
+        type: string
       drive_folder_id:
         type: string
       drive_folder_name:

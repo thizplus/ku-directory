@@ -315,7 +315,7 @@ func (s *SharedFolderServiceImpl) AddFolder(ctx context.Context, userID uuid.UUI
 		"drive_folder_id": driveFolderID,
 	})
 
-	folderMeta, err := srv.Files.Get(driveFolderID).Fields("id, name, mimeType, owners, shared, capabilities").Do()
+	folderMeta, err := srv.Files.Get(driveFolderID).Fields("id, name, mimeType, owners, shared, capabilities, description").Do()
 	if err != nil {
 		logGoogleAPIError("get_metadata_failed", "Failed to get folder metadata from Google Drive", err, map[string]interface{}{
 			"user_id":          userID.String(),
@@ -331,6 +331,7 @@ func (s *SharedFolderServiceImpl) AddFolder(ctx context.Context, userID uuid.UUI
 		"drive_folder_name": folderMeta.Name,
 		"mime_type":         folderMeta.MimeType,
 		"shared":            folderMeta.Shared,
+		"description":       folderMeta.Description,
 	}
 	if len(folderMeta.Owners) > 0 {
 		folderDetails["owner_email"] = folderMeta.Owners[0].EmailAddress
@@ -350,6 +351,7 @@ func (s *SharedFolderServiceImpl) AddFolder(ctx context.Context, userID uuid.UUI
 		DriveFolderID:     driveFolderID,
 		DriveFolderName:   folderMeta.Name,
 		DriveFolderPath:   folderMeta.Name,
+		Description:       folderMeta.Description,
 		DriveResourceKey:  resourceKey, // For older shared folders (pre-2021)
 		SyncStatus:        models.SyncStatusSyncing, // Mark as syncing - will update via WebSocket
 		DriveAccessToken:  accessToken,
