@@ -29,6 +29,7 @@ func SetupFaceRoutes(router fiber.Router, h *handlers.Handlers) {
 	faces.Post("/retry", h.Face.RetryFailed)            // Retry failed face processing
 
 	// Admin/Debug endpoints
-	faces.Get("/pending", h.Face.GetPendingPhotos)      // Get pending photos
-	faces.Post("/process", h.Face.ResetPhotosToPending) // Reset photos to pending for reprocessing
+	faces.Get("/pending", h.Face.GetPendingPhotos)          // Get pending photos
+	faces.Post("/process", h.Face.ResetPhotosToPending)     // Reset photos to pending for reprocessing
+	faces.Post("/reset-stuck", h.Face.ResetStuckProcessing) // Reset stuck "processing" photos (admin)
 }

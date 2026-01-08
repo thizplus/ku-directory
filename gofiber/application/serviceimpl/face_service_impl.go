@@ -509,6 +509,22 @@ func (s *FaceServiceImpl) GetAllPendingPhotos(ctx context.Context, limit int) ([
 	return photos, nil
 }
 
+// ResetStuckProcessing resets photos stuck in "processing" status back to "pending"
+func (s *FaceServiceImpl) ResetStuckProcessing(ctx context.Context) (int64, error) {
+	logger.Face("reset_stuck_processing", "ResetStuckProcessing called", nil)
+
+	count, err := s.photoRepo.ResetProcessingToPending(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("failed to reset stuck processing photos: %w", err)
+	}
+
+	logger.Face("reset_stuck_processing_result", "Reset stuck processing photos", map[string]interface{}{
+		"count": count,
+	})
+
+	return count, nil
+}
+
 // ResetPhotosToPending resets specific photos to pending status for reprocessing
 func (s *FaceServiceImpl) ResetPhotosToPending(ctx context.Context, userID uuid.UUID, photoIDs []uuid.UUID) (int64, error) {
 	logger.Face("reset_photos_start", "ResetPhotosToPending called", map[string]interface{}{

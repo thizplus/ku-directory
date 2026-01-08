@@ -526,6 +526,34 @@ type ResetPhotosRequest struct {
 	PhotoIDs []string `json:"photo_ids" validate:"required,min=1"`
 }
 
+// ResetStuckProcessing resets photos stuck in "processing" status back to "pending"
+// @Summary Reset stuck processing photos
+// @Tags Faces
+// @Produce json
+// @Success 200 {object} utils.Response
+// @Security BearerAuth
+// @Router /api/v1/faces/reset-stuck [post]
+func (h *FaceHandler) ResetStuckProcessing(c *fiber.Ctx) error {
+	userCtx, err := utils.GetUserFromContext(c)
+	if err != nil {
+		return utils.UnauthorizedResponse(c, "Not authenticated")
+	}
+
+	// Only admin can reset stuck photos
+	if userCtx.Role != "admin" {
+		return utils.ErrorResponse(c, fiber.StatusForbidden, "Admin access required", nil)
+	}
+
+	count, err := h.faceService.ResetStuckProcessing(c.Context())
+	if err != nil {
+		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to reset stuck photos", err)
+	}
+
+	return utils.SuccessResponse(c, "Stuck photos reset to pending", fiber.Map{
+		"reset_count": count,
+	})
+}
+
 // ResetPhotosToPending resets specific photos to pending for reprocessing
 // @Summary Reset photos to pending status for reprocessing
 // @Tags Faces

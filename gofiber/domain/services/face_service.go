@@ -80,6 +80,9 @@ type FaceService interface {
 
 	// Reset photos to pending status (force reprocess)
 	ResetPhotosToPending(ctx context.Context, userID uuid.UUID, photoIDs []uuid.UUID) (int64, error)
+
+	// Reset photos stuck in "processing" status back to "pending" (admin only)
+	ResetStuckProcessing(ctx context.Context) (int64, error)
 }
 
 // FaceProcessingStats contains face processing statistics
