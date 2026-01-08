@@ -8,8 +8,8 @@ import (
 func CorsMiddleware() fiber.Handler {
 	return cors.New(cors.Config{
 		AllowOrigins:     "*",
-		AllowMethods:     "GET,POST,PUT,DELETE,OPTIONS",
-		AllowHeaders:     "Origin,Content-Type,Accept,Authorization",
-		AllowCredentials: true,
+		AllowMethods:     "GET,POST,PUT,DELETE,OPTIONS,PATCH",
+		AllowHeaders:     "Origin,Content-Type,Accept,Authorization,X-Admin-Token",
+		AllowCredentials: false, // Cannot use credentials with wildcard origins
 	})
 }
