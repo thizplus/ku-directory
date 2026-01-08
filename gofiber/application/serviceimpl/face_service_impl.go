@@ -491,6 +491,24 @@ func (s *FaceServiceImpl) GetPendingPhotos(ctx context.Context, userID uuid.UUID
 	return photos, nil
 }
 
+// GetAllPendingPhotos returns ALL pending photos globally (admin only)
+func (s *FaceServiceImpl) GetAllPendingPhotos(ctx context.Context, limit int) ([]models.Photo, error) {
+	logger.Face("get_all_pending_photos", "GetAllPendingPhotos called (admin)", map[string]interface{}{
+		"limit": limit,
+	})
+
+	photos, err := s.photoRepo.GetByFaceStatus(ctx, models.FaceStatusPending, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get pending photos: %w", err)
+	}
+
+	logger.Face("get_all_pending_photos_result", "Found all pending photos", map[string]interface{}{
+		"count": len(photos),
+	})
+
+	return photos, nil
+}
+
 // ResetPhotosToPending resets specific photos to pending status for reprocessing
 func (s *FaceServiceImpl) ResetPhotosToPending(ctx context.Context, userID uuid.UUID, photoIDs []uuid.UUID) (int64, error) {
 	logger.Face("reset_photos_start", "ResetPhotosToPending called", map[string]interface{}{

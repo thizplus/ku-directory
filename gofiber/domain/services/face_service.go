@@ -75,6 +75,9 @@ type FaceService interface {
 	// Get pending photos (for debugging)
 	GetPendingPhotos(ctx context.Context, userID uuid.UUID, limit int) ([]models.Photo, error)
 
+	// Get ALL pending photos globally (admin only)
+	GetAllPendingPhotos(ctx context.Context, limit int) ([]models.Photo, error)
+
 	// Reset photos to pending status (force reprocess)
 	ResetPhotosToPending(ctx context.Context, userID uuid.UUID, photoIDs []uuid.UUID) (int64, error)
 }

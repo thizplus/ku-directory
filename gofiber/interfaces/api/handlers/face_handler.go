@@ -6,6 +6,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 
+	"gofiber-template/domain/models"
 	"gofiber-template/domain/services"
 	"gofiber-template/pkg/utils"
 )
@@ -464,6 +465,7 @@ func (h *FaceHandler) GetFaces(c *fiber.Ctx) error {
 // @Tags Faces
 // @Produce json
 // @Param limit query int false "Max results" default(50)
+// @Param all query bool false "Get all pending photos globally (admin)" default(false)
 // @Success 200 {object} utils.Response
 // @Security BearerAuth
 // @Router /api/v1/faces/pending [get]
@@ -478,7 +480,18 @@ func (h *FaceHandler) GetPendingPhotos(c *fiber.Ctx) error {
 		limit = 50
 	}
 
-	photos, err := h.faceService.GetPendingPhotos(c.Context(), userCtx.ID, limit)
+	// Check if admin wants to see all pending photos globally
+	showAll := c.QueryBool("all", false)
+
+	var photos []models.Photo
+	if showAll && userCtx.Role == "admin" {
+		// Admin can see all pending photos globally
+		photos, err = h.faceService.GetAllPendingPhotos(c.Context(), limit)
+	} else {
+		// Regular users see only their accessible photos
+		photos, err = h.faceService.GetPendingPhotos(c.Context(), userCtx.ID, limit)
+	}
+
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to get pending photos", err)
 	}
@@ -486,9 +499,13 @@ func (h *FaceHandler) GetPendingPhotos(c *fiber.Ctx) error {
 	// Convert to response format
 	response := make([]fiber.Map, len(photos))
 	for i, p := range photos {
+		folderID := ""
+		if p.SharedFolderID != uuid.Nil {
+			folderID = p.SharedFolderID.String()
+		}
 		response[i] = fiber.Map{
 			"id":                p.ID.String(),
-			"shared_folder_id":  p.SharedFolderID.String(),
+			"shared_folder_id":  folderID,
 			"drive_file_id":     p.DriveFileID,
 			"file_name":         p.FileName,
 			"drive_folder_path": p.DriveFolderPath,
@@ -500,6 +517,7 @@ func (h *FaceHandler) GetPendingPhotos(c *fiber.Ctx) error {
 	return utils.SuccessResponse(c, "Pending photos retrieved", fiber.Map{
 		"photos": response,
 		"count":  len(response),
+		"global": showAll && userCtx.Role == "admin",
 	})
 }
 
