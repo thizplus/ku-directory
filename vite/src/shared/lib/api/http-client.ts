@@ -3,12 +3,18 @@
  */
 import axios, { type AxiosError, type AxiosInstance, type InternalAxiosRequestConfig } from 'axios'
 
+// Error codes from backend
+export const ERROR_CODES = {
+  GOOGLE_TOKEN_EXPIRED: 'GOOGLE_TOKEN_EXPIRED',
+} as const
+
 // Types
 export interface ApiResponse<T> {
   success: boolean
   message: string
   data?: T
   error?: string
+  error_code?: string
 }
 
 export interface PaginatedResponse<T> {
@@ -57,11 +63,23 @@ apiClient.interceptors.request.use(
   }
 )
 
+// Custom event for Google token expired
+export const GOOGLE_TOKEN_EXPIRED_EVENT = 'google-token-expired'
+
 // Response interceptor - handle errors
 apiClient.interceptors.response.use(
   (response) => response,
   (error: AxiosError<ApiResponse<unknown>>) => {
-    // Handle 401 Unauthorized
+    const errorCode = error.response?.data?.error_code
+
+    // Handle Google token expired (different from JWT 401)
+    if (errorCode === ERROR_CODES.GOOGLE_TOKEN_EXPIRED) {
+      // Dispatch custom event for UI to handle
+      window.dispatchEvent(new CustomEvent(GOOGLE_TOKEN_EXPIRED_EVENT))
+      return Promise.reject(error)
+    }
+
+    // Handle 401 Unauthorized (JWT expired)
     if (error.response?.status === 401) {
       // Clear auth and redirect to login
       localStorage.removeItem('auth-storage')

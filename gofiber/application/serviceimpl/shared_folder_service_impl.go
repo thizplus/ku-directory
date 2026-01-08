@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -14,6 +15,44 @@ import (
 	"gofiber-template/infrastructure/googledrive"
 	"gofiber-template/infrastructure/worker"
 )
+
+// Error codes for frontend handling
+const (
+	ErrCodeGoogleTokenExpired = "GOOGLE_TOKEN_EXPIRED"
+)
+
+// GoogleTokenError represents an error when Google OAuth token is invalid/expired
+type GoogleTokenError struct {
+	Code    string
+	Message string
+}
+
+func (e *GoogleTokenError) Error() string {
+	return e.Message
+}
+
+// isGoogleAuthError checks if error is related to Google OAuth authentication
+func isGoogleAuthError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := err.Error()
+	return strings.Contains(errStr, "401") ||
+		strings.Contains(errStr, "Invalid Credentials") ||
+		strings.Contains(errStr, "invalid_grant") ||
+		strings.Contains(errStr, "Token has been expired or revoked")
+}
+
+// wrapGoogleAuthError wraps Google auth errors with a user-friendly message
+func wrapGoogleAuthError(err error) error {
+	if isGoogleAuthError(err) {
+		return &GoogleTokenError{
+			Code:    ErrCodeGoogleTokenExpired,
+			Message: "Google Drive token หมดอายุ กรุณาเชื่อมต่อ Google Drive ใหม่",
+		}
+	}
+	return err
+}
 
 type SharedFolderServiceImpl struct {
 	sharedFolderRepo repositories.SharedFolderRepository
@@ -74,12 +113,12 @@ func (s *SharedFolderServiceImpl) AddFolder(ctx context.Context, userID uuid.UUI
 	// Folder doesn't exist - create new one
 	srv, err := s.driveClient.GetDriveService(ctx, accessToken, refreshToken, time.Time{})
 	if err != nil {
-		return nil, fmt.Errorf("failed to get drive service: %w", err)
+		return nil, wrapGoogleAuthError(fmt.Errorf("failed to get drive service: %w", err))
 	}
 
 	folderMeta, err := srv.Files.Get(driveFolderID).Fields("id, name").Do()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get folder metadata: %w", err)
+		return nil, wrapGoogleAuthError(fmt.Errorf("failed to get folder metadata: %w", err))
 	}
 
 	// Generate webhook token

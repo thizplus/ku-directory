@@ -1,9 +1,12 @@
 package handlers
 
 import (
+	"errors"
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 
+	"gofiber-template/application/serviceimpl"
 	"gofiber-template/domain/dto"
 	"gofiber-template/domain/models"
 	"gofiber-template/domain/repositories"
@@ -188,6 +191,15 @@ func (h *SharedFolderHandler) AddFolder(c *fiber.Ctx) error {
 
 	folder, err := h.sharedFolderService.AddFolder(c.Context(), userCtx.ID, req.DriveFolderID, user.DriveAccessToken, user.DriveRefreshToken)
 	if err != nil {
+		// Check if it's a Google token error
+		var tokenErr *serviceimpl.GoogleTokenError
+		if errors.As(err, &tokenErr) {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"success":    false,
+				"error":      tokenErr.Message,
+				"error_code": tokenErr.Code,
+			})
+		}
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"success": false,
 			"error":   err.Error(),
