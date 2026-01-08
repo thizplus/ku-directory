@@ -297,11 +297,12 @@ func (c *Container) initWorkers() error {
 		logger.Startup("face_api_disabled", "Face API is disabled, skipping face worker initialization", nil)
 	}
 
-	// Initialize SharedFolderService (needs SyncWorker, SyncJobRepository, and PhotoRepository)
+	// Initialize SharedFolderService (needs SyncWorker, SyncJobRepository, PhotoRepository, and UserRepository)
 	c.SharedFolderService = serviceimpl.NewSharedFolderService(
 		c.SharedFolderRepository,
 		c.SyncJobRepository,
 		c.PhotoRepository,
+		c.UserRepository,
 		c.GoogleDrive,
 		c.SyncWorker,
 	)

@@ -130,6 +130,37 @@ func (c *DriveClient) RefreshToken(ctx context.Context, refreshToken string) (*T
 	}, nil
 }
 
+// RefreshTokenIfNeeded checks if token needs refresh and returns the current valid token
+// Returns the same token if still valid, or a new token if refresh was needed
+// Also returns a boolean indicating if the token was refreshed
+func (c *DriveClient) RefreshTokenIfNeeded(ctx context.Context, accessToken, refreshToken string, expiry time.Time) (*TokenInfo, bool, error) {
+	token := &oauth2.Token{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		TokenType:    "Bearer",
+		Expiry:       expiry,
+	}
+
+	// Create token source - this will auto-refresh if needed
+	tokenSource := c.config.TokenSource(ctx, token)
+
+	// Get the current valid token (may trigger refresh)
+	newToken, err := tokenSource.Token()
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to get valid token: %w", err)
+	}
+
+	// Check if token was refreshed (access token changed)
+	wasRefreshed := newToken.AccessToken != accessToken
+
+	return &TokenInfo{
+		AccessToken:  newToken.AccessToken,
+		RefreshToken: newToken.RefreshToken,
+		TokenType:    newToken.TokenType,
+		Expiry:       newToken.Expiry,
+	}, wasRefreshed, nil
+}
+
 // GetDriveService creates a Drive service with the given tokens
 func (c *DriveClient) GetDriveService(ctx context.Context, accessToken, refreshToken string, expiry time.Time) (*drive.Service, error) {
 	return c.GetDriveServiceWithResourceKey(ctx, accessToken, refreshToken, expiry, "", "")

@@ -169,6 +169,7 @@ type SharedFolderServiceImpl struct {
 	sharedFolderRepo repositories.SharedFolderRepository
 	syncJobRepo      repositories.SyncJobRepository
 	photoRepo        repositories.PhotoRepository
+	userRepo         repositories.UserRepository
 	driveClient      *googledrive.DriveClient
 	syncWorker       *worker.SyncWorker
 }
@@ -177,6 +178,7 @@ func NewSharedFolderService(
 	sharedFolderRepo repositories.SharedFolderRepository,
 	syncJobRepo repositories.SyncJobRepository,
 	photoRepo repositories.PhotoRepository,
+	userRepo repositories.UserRepository,
 	driveClient *googledrive.DriveClient,
 	syncWorker *worker.SyncWorker,
 ) services.SharedFolderService {
@@ -184,6 +186,7 @@ func NewSharedFolderService(
 		sharedFolderRepo: sharedFolderRepo,
 		syncJobRepo:      syncJobRepo,
 		photoRepo:        photoRepo,
+		userRepo:         userRepo,
 		driveClient:      driveClient,
 		syncWorker:       syncWorker,
 	}
@@ -198,6 +201,44 @@ func (s *SharedFolderServiceImpl) AddFolder(ctx context.Context, userID uuid.UUI
 		"has_resource_key": resourceKey != "",
 		"has_token":        accessToken != "",
 	})
+
+	// Step 0: Refresh token if needed and save to database
+	// This ensures we always use a valid token and persist refreshed tokens
+	tokenInfo, wasRefreshed, err := s.driveClient.RefreshTokenIfNeeded(ctx, accessToken, refreshToken, time.Time{})
+	if err != nil {
+		logGoogleAPIError("token_refresh_failed", "Failed to refresh Google token", err, map[string]interface{}{
+			"user_id": userID.String(),
+		})
+		return nil, wrapGoogleAuthError(fmt.Errorf("failed to refresh token: %w", err))
+	}
+
+	// Use the (possibly refreshed) token
+	accessToken = tokenInfo.AccessToken
+	if tokenInfo.RefreshToken != "" {
+		refreshToken = tokenInfo.RefreshToken
+	}
+
+	// If token was refreshed, save the new tokens to database
+	if wasRefreshed {
+		logger.Drive("token_refreshed", "Google token was refreshed, saving to database", map[string]interface{}{
+			"user_id":     userID.String(),
+			"new_expiry":  tokenInfo.Expiry.Format(time.RFC3339),
+			"has_new_refresh_token": tokenInfo.RefreshToken != "",
+		})
+
+		// Update user's tokens in database
+		if err := s.userRepo.UpdateDriveTokens(ctx, userID, accessToken, refreshToken); err != nil {
+			logger.DriveError("save_token_failed", "Failed to save refreshed token to database", err, map[string]interface{}{
+				"user_id": userID.String(),
+			})
+			// Don't fail the operation - we can still proceed with the refreshed token
+			// Just log the error
+		} else {
+			logger.Drive("token_saved", "Refreshed token saved to database", map[string]interface{}{
+				"user_id": userID.String(),
+			})
+		}
+	}
 
 	// Check if folder already exists
 	existingFolder, _ := s.sharedFolderRepo.GetByDriveFolderID(ctx, driveFolderID)

@@ -16,6 +16,7 @@ type UserRepository interface {
 	GetByPublicSlug(ctx context.Context, slug string) (*models.User, error)
 	GetByDriveWebhookToken(ctx context.Context, token string) (*models.User, error)
 	Update(ctx context.Context, id uuid.UUID, user *models.User) error
+	UpdateDriveTokens(ctx context.Context, userID uuid.UUID, accessToken, refreshToken string) error
 	Delete(ctx context.Context, id uuid.UUID) error
 	List(ctx context.Context, offset, limit int) ([]*models.User, error)
 	Count(ctx context.Context) (int64, error)

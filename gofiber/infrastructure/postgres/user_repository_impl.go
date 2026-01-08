@@ -78,6 +78,17 @@ func (r *UserRepositoryImpl) Update(ctx context.Context, id uuid.UUID, user *mod
 	return r.db.WithContext(ctx).Where("id = ?", id).Updates(user).Error
 }
 
+func (r *UserRepositoryImpl) UpdateDriveTokens(ctx context.Context, userID uuid.UUID, accessToken, refreshToken string) error {
+	updates := map[string]interface{}{
+		"drive_access_token": accessToken,
+	}
+	// Only update refresh token if provided (Google doesn't always return a new one)
+	if refreshToken != "" {
+		updates["drive_refresh_token"] = refreshToken
+	}
+	return r.db.WithContext(ctx).Model(&models.User{}).Where("id = ?", userID).Updates(updates).Error
+}
+
 func (r *UserRepositoryImpl) Delete(ctx context.Context, id uuid.UUID) error {
 	return r.db.WithContext(ctx).Where("id = ?", id).Delete(&models.User{}).Error
 }
