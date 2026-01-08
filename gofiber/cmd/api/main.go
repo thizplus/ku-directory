@@ -7,12 +7,39 @@ import (
 	"syscall"
 
 	"github.com/gofiber/fiber/v2"
+	swagger "github.com/swaggo/fiber-swagger"
 	"gofiber-template/interfaces/api/handlers"
 	"gofiber-template/interfaces/api/middleware"
 	"gofiber-template/interfaces/api/routes"
 	"gofiber-template/pkg/di"
 	"gofiber-template/pkg/logger"
+
+	_ "gofiber-template/docs" // Swagger docs
 )
+
+// @title KU Directory API
+// @version 1.0
+// @description API สำหรับระบบจัดการรูปภาพและโฟลเดอร์ Google Drive
+// @termsOfService http://swagger.io/terms/
+
+// @contact.name API Support
+// @contact.email support@example.com
+
+// @license.name MIT
+// @license.url https://opensource.org/licenses/MIT
+
+// @host localhost:8080
+// @BasePath /api/v1
+
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Type "Bearer" followed by a space and JWT token.
+
+// @securityDefinitions.apikey AdminToken
+// @in header
+// @name X-Admin-Token
+// @description Admin token for log access
 
 func main() {
 	// Initialize logger
@@ -51,6 +78,9 @@ func main() {
 	// Setup routes
 	routes.SetupRoutes(app, h)
 
+	// Setup Swagger
+	app.Get("/swagger/*", swagger.WrapHandler)
+
 	// Start server
 	port := container.GetConfig().App.Port
 	logger.Startup("server_starting", "Server starting", map[string]interface{}{
@@ -58,6 +88,7 @@ func main() {
 		"environment": container.GetConfig().App.Env,
 		"health":      fmt.Sprintf("http://localhost:%s/health", port),
 		"api":         fmt.Sprintf("http://localhost:%s/api/v1", port),
+		"swagger":     fmt.Sprintf("http://localhost:%s/swagger/index.html", port),
 		"websocket":   fmt.Sprintf("ws://localhost:%s/ws", port),
 		"logs_api":    fmt.Sprintf("http://localhost:%s/api/v1/admin/logs", port),
 	})

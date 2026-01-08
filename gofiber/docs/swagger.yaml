@@ -1,0 +1,555 @@
+basePath: /api/v1
+definitions:
+  dto.AddFolderRequest:
+    properties:
+      drive_folder_id:
+        type: string
+      drive_resource_key:
+        description: For older shared folders (pre-2021)
+        type: string
+    required:
+    - drive_folder_id
+    type: object
+  dto.PhotoListResponse:
+    properties:
+      limit:
+        type: integer
+      page:
+        type: integer
+      photos:
+        items:
+          $ref: '#/definitions/dto.PhotoResponse'
+        type: array
+      total:
+        type: integer
+    type: object
+  dto.PhotoResponse:
+    properties:
+      created_at:
+        type: string
+      drive_file_id:
+        type: string
+      drive_folder_path:
+        type: string
+      face_count:
+        type: integer
+      face_status:
+        type: string
+      file_name:
+        type: string
+      id:
+        type: string
+      mime_type:
+        type: string
+      shared_folder_id:
+        type: string
+      thumbnail_url:
+        type: string
+      web_view_url:
+        type: string
+    type: object
+  dto.SharedFolderListResponse:
+    properties:
+      folders:
+        items:
+          $ref: '#/definitions/dto.SharedFolderResponse'
+        type: array
+    type: object
+  dto.SharedFolderResponse:
+    properties:
+      children:
+        items:
+          $ref: '#/definitions/dto.SubFolderInfo'
+        type: array
+      created_at:
+        type: string
+      drive_folder_id:
+        type: string
+      drive_folder_name:
+        type: string
+      drive_folder_path:
+        type: string
+      id:
+        type: string
+      last_sync_at:
+        type: string
+      last_sync_error:
+        type: string
+      photo_count:
+        type: integer
+      sync_status:
+        type: string
+      user_count:
+        type: integer
+    type: object
+  dto.SubFolderInfo:
+    properties:
+      name:
+        type: string
+      path:
+        type: string
+      photo_count:
+        type: integer
+    type: object
+  handlers.GenerateNewsRequest:
+    properties:
+      headings:
+        description: 'Optional: 4 custom headings'
+        items:
+          type: string
+        type: array
+      length:
+        description: short, medium, long
+        type: string
+      photo_ids:
+        description: 'Optional: photos for context'
+        items:
+          type: string
+        type: array
+      tone:
+        description: formal, friendly, news
+        type: string
+    type: object
+  handlers.SearchByFaceIDRequest:
+    properties:
+      face_id:
+        type: string
+      limit:
+        type: integer
+      threshold:
+        type: number
+    required:
+    - face_id
+    type: object
+  utils.Response:
+    properties:
+      data: {}
+      error:
+        type: string
+      message:
+        type: string
+      success:
+        type: boolean
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: support@example.com
+    name: API Support
+  description: API สำหรับระบบจัดการรูปภาพและโฟลเดอร์ Google Drive
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  termsOfService: http://swagger.io/terms/
+  title: KU Directory API
+  version: "1.0"
+paths:
+  /admin/logs:
+    get:
+      parameters:
+      - default: 100
+        description: Number of lines
+        in: query
+        name: lines
+        type: integer
+      - description: Filter by level (DEBUG, INFO, WARN, ERROR)
+        in: query
+        name: level
+        type: string
+      - description: Filter by category (auth, webhook, websocket, sync, api, db,
+          drive)
+        in: query
+        name: category
+        type: string
+      - description: Search in message/action
+        in: query
+        name: search
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - AdminToken: []
+      summary: Get application logs
+      tags:
+      - Admin
+  /admin/logs/files:
+    get:
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - AdminToken: []
+      summary: List log files
+      tags:
+      - Admin
+  /admin/logs/folder/{id}:
+    get:
+      parameters:
+      - description: Folder ID (UUID or Drive Folder ID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - default: 7
+        description: Number of days to search
+        in: query
+        name: days
+        type: integer
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - AdminToken: []
+      summary: Get logs for a specific folder
+      tags:
+      - Admin
+  /admin/logs/stats:
+    get:
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - AdminToken: []
+      summary: Get log statistics
+      tags:
+      - Admin
+  /api/v1/faces:
+    get:
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 50
+        description: Page size
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.Response'
+      summary: Get all faces with pagination
+      tags:
+      - Faces
+  /api/v1/faces/detect:
+    post:
+      consumes:
+      - multipart/form-data
+      parameters:
+      - description: Image file
+        in: formData
+        name: image
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.Response'
+      summary: Detect faces in an image
+      tags:
+      - Faces
+  /api/v1/faces/photo/{photo_id}:
+    get:
+      parameters:
+      - description: Photo ID
+        in: path
+        name: photo_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.Response'
+      summary: Get faces by photo ID
+      tags:
+      - Faces
+  /api/v1/faces/retry:
+    post:
+      parameters:
+      - description: Folder ID (optional, retry all if not specified)
+        in: query
+        name: folder_id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.Response'
+      summary: Retry failed face processing
+      tags:
+      - Faces
+  /api/v1/faces/search/face:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Search request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.SearchByFaceIDRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.Response'
+      summary: Search similar faces using an existing face
+      tags:
+      - Faces
+  /api/v1/faces/search/image:
+    post:
+      consumes:
+      - multipart/form-data
+      parameters:
+      - description: Image file
+        in: formData
+        name: image
+        required: true
+        type: file
+      - default: 0
+        description: 'Face index to search (default: 0)'
+        in: query
+        name: face_index
+        type: integer
+      - default: 20
+        description: Max results
+        in: query
+        name: limit
+        type: integer
+      - default: 0.6
+        description: Similarity threshold (0-1)
+        in: query
+        name: threshold
+        type: number
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.Response'
+      summary: Search faces by uploading an image
+      tags:
+      - Faces
+  /api/v1/faces/stats:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.Response'
+      summary: Get face processing statistics
+      tags:
+      - Faces
+  /api/v1/news/generate:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Generate request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.GenerateNewsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.Response'
+      summary: Generate news article from photos
+      tags:
+      - News
+  /folders:
+    get:
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.SharedFolderListResponse'
+      security:
+      - BearerAuth: []
+      summary: List user's folders
+      tags:
+      - Folders
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Folder info
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.AddFolderRequest'
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.SharedFolderResponse'
+      security:
+      - BearerAuth: []
+      summary: Add folder
+      tags:
+      - Folders
+  /folders/{id}:
+    delete:
+      parameters:
+      - description: Folder ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+      security:
+      - BearerAuth: []
+      summary: Leave folder
+      tags:
+      - Folders
+    get:
+      parameters:
+      - description: Folder ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.SharedFolderResponse'
+      security:
+      - BearerAuth: []
+      summary: Get folder by ID
+      tags:
+      - Folders
+  /folders/{id}/photos:
+    get:
+      parameters:
+      - description: Folder ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 50
+        description: Items per page
+        in: query
+        name: limit
+        type: integer
+      - description: Filter by sub-folder path
+        in: query
+        name: folder_path
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.PhotoListResponse'
+      security:
+      - BearerAuth: []
+      summary: Get photos from folder
+      tags:
+      - Folders
+  /folders/{id}/subfolders:
+    get:
+      parameters:
+      - description: Folder ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get sub-folders in a shared folder
+      tags:
+      - Folders
+  /folders/{id}/sync:
+    post:
+      parameters:
+      - description: Folder ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+      security:
+      - BearerAuth: []
+      summary: Trigger folder sync
+      tags:
+      - Folders
+  /folders/{id}/webhook:
+    post:
+      parameters:
+      - description: Folder ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+      security:
+      - BearerAuth: []
+      summary: Register webhook for folder
+      tags:
+      - Folders
+securityDefinitions:
+  AdminToken:
+    description: Admin token for log access
+    in: header
+    name: X-Admin-Token
+    type: apiKey
+  BearerAuth:
+    description: Type "Bearer" followed by a space and JWT token.
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"
