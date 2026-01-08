@@ -4,31 +4,37 @@ import { PhotoProvider, PhotoView } from "react-photo-view"
 import "react-photo-view/dist/react-photo-view.css"
 import {
   Images,
-  FolderTree,
   Folder,
   FolderOpen,
   RefreshCw,
   Loader2,
   AlertCircle,
-  AlertTriangle,
   CheckCircle2,
   Clock,
   ImageOff,
   Users,
-  Search,
   ArrowRight,
-  X,
   Download,
-  CheckSquare,
-  Square,
   Check,
   ZoomIn,
   Newspaper,
   RotateCcw,
+  ChevronRight,
+  Home,
+  LayoutGrid,
+  List,
+  Settings,
+  Search,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 
 import {
   useDriveStatus,
@@ -45,146 +51,27 @@ import { useDownloadProgressStore } from "@/stores/download-progress"
 import { useSyncProgressStore } from "@/stores/sync-progress"
 import { getThumbnailUrl } from "@/shared/config/constants"
 import { cn } from "@/lib/utils"
-import type { Photo } from "@/shared/types"
+import type { Photo, SharedFolder } from "@/shared/types"
 
-// Metric Item Component
-interface MetricItemProps {
-  label: string
-  value: string | number
-  subtext?: string
-  icon?: React.ReactNode
-  isLoading?: boolean
-}
+// View mode type
+type ViewMode = "grid" | "list"
 
-function MetricItem({ label, value, subtext, icon, isLoading }: MetricItemProps) {
-  return (
-    <div className="space-y-1">
-      <p className="text-xs text-muted-foreground flex items-center gap-1">
-        {icon}
-        {label}
-      </p>
-      {isLoading ? (
-        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-      ) : (
-        <>
-          <p className="text-lg font-semibold tabular-nums">{value}</p>
-          {subtext && <p className="text-xs text-muted-foreground">{subtext}</p>}
-        </>
-      )}
-    </div>
-  )
-}
-
-// Tree node interface for folder tree
-interface FolderTreeNode {
+// Breadcrumb item
+interface BreadcrumbItem {
+  id: string
   name: string
+  path?: string
+}
+
+// Sub-folder info from API
+interface SubFolderInfo {
   path: string
-  photoCount: number
-  children: FolderTreeNode[]
-  folderId: string
-  syncStatus: string
+  name: string
+  photo_count: number
 }
 
-// Recursive Tree Node component
-function TreeNodeItem({
-  node,
-  level = 0,
-  selectedFolderId,
-  selectedPath,
-  onSelect,
-  onSync,
-  isSyncing,
-  syncProgress,
-}: {
-  node: FolderTreeNode
-  level?: number
-  selectedFolderId?: string
-  selectedPath?: string
-  onSelect: (folderId: string, path: string | undefined, name: string) => void
-  onSync: (folderId: string) => void
-  isSyncing: boolean
-  syncProgress?: { percent: number } | null
-}) {
-  const [isExpanded, setIsExpanded] = useState(true)
-  const hasChildren = node.children.length > 0
-  const isRoot = level === 0
-  const isSelected = isRoot
-    ? (selectedFolderId === node.folderId && !selectedPath)
-    : (selectedFolderId === node.folderId && selectedPath === node.path)
-
-  return (
-    <div>
-      <div
-        className={cn(
-          "flex items-center justify-between py-1 px-1 rounded cursor-pointer transition-colors group",
-          isSelected ? "bg-primary/10 text-primary" : "hover:bg-muted/50"
-        )}
-        style={{ paddingLeft: `${level * 12 + 4}px` }}
-      >
-        <button
-          className="flex items-center gap-1 flex-1 text-left min-w-0"
-          onClick={() => onSelect(node.folderId, isRoot ? undefined : node.path, node.name)}
-        >
-          <button
-            className="p-0.5 hover:bg-muted rounded"
-            onClick={(e) => {
-              e.stopPropagation()
-              if (hasChildren) setIsExpanded(!isExpanded)
-            }}
-          >
-            {isExpanded && hasChildren ? (
-              <FolderOpen className="h-3 w-3 text-yellow-500" />
-            ) : (
-              <Folder className="h-3 w-3 text-yellow-500" />
-            )}
-          </button>
-          <span className="text-xs truncate">{node.name}</span>
-          <span className="text-[10px] text-muted-foreground flex-shrink-0">
-            ({node.photoCount})
-          </span>
-        </button>
-        {isRoot && (
-          <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-            {syncProgress && (
-              <span className="text-[10px] text-primary font-medium">{syncProgress.percent}%</span>
-            )}
-            <button
-              className="p-1 hover:bg-muted rounded"
-              onClick={(e) => {
-                e.stopPropagation()
-                onSync(node.folderId)
-              }}
-              disabled={isSyncing}
-              title="Sync โฟลเดอร์นี้"
-            >
-              <RefreshCw className={cn("h-3 w-3 text-muted-foreground", isSyncing && "animate-spin")} />
-            </button>
-          </div>
-        )}
-      </div>
-      {hasChildren && isExpanded && (
-        <div>
-          {node.children.map((child, idx) => (
-            <TreeNodeItem
-              key={`${child.path}-${idx}`}
-              node={child}
-              level={level + 1}
-              selectedFolderId={selectedFolderId}
-              selectedPath={selectedPath}
-              onSelect={onSelect}
-              onSync={onSync}
-              isSyncing={isSyncing}
-              syncProgress={syncProgress}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-// Photo card component with selection support
-function PhotoCard({
+// Photo card component - Grid view
+function PhotoCardGrid({
   photo,
   token,
   isSelected,
@@ -196,7 +83,6 @@ function PhotoCard({
   onToggleSelect: () => void
 }) {
   const [imageError, setImageError] = useState(false)
-
   const thumbnailUrl = token ? getThumbnailUrl(photo.drive_file_id, token) : ""
   const fullSizeUrl = token ? getThumbnailUrl(photo.drive_file_id, token, 1600) : ""
 
@@ -220,7 +106,7 @@ function PhotoCard({
       <PhotoView src={fullSizeUrl}>
         <div className={cn(
           "relative aspect-square bg-muted rounded-lg overflow-hidden cursor-pointer transition-all",
-          isSelected && "ring-1 ring-green-500"
+          isSelected && "ring-2 ring-primary"
         )}>
           {imageError || !token ? (
             <div className="absolute inset-0 flex items-center justify-center">
@@ -235,15 +121,10 @@ function PhotoCard({
               loading="lazy"
             />
           )}
-          {/* Zoom indicator on hover */}
           <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center pointer-events-none">
             <ZoomIn className="h-8 w-8 text-white opacity-0 group-hover:opacity-70 transition-opacity" />
           </div>
-          {/* Status indicator */}
-          <div className="absolute top-1.5 left-1.5">
-            {getStatusIcon()}
-          </div>
-          {/* Face count */}
+          <div className="absolute top-1.5 left-1.5">{getStatusIcon()}</div>
           {photo.face_count > 0 && (
             <div className="absolute bottom-1.5 right-1.5 bg-black/60 text-white text-xs px-1.5 py-0.5 rounded flex items-center gap-1">
               <Users className="h-3 w-3" />
@@ -253,7 +134,6 @@ function PhotoCard({
         </div>
       </PhotoView>
 
-      {/* Selection checkbox */}
       <button
         className="absolute top-1.5 right-1.5 z-10"
         onClick={(e) => {
@@ -264,8 +144,8 @@ function PhotoCard({
         <div className={cn(
           "h-5 w-5 rounded border flex items-center justify-center transition-all shadow-sm",
           isSelected
-            ? "bg-green-500 border-green-500 text-white"
-            : "bg-white/90 border-gray-300 hover:border-green-500 hover:bg-white"
+            ? "bg-primary border-primary text-white"
+            : "bg-white/90 border-gray-300 hover:border-primary hover:bg-white"
         )}>
           {isSelected && <Check className="h-3.5 w-3.5" strokeWidth={3} />}
         </div>
@@ -278,190 +158,303 @@ function PhotoCard({
   )
 }
 
+// Photo card component - List view
+function PhotoCardList({
+  photo,
+  token,
+  isSelected,
+  onToggleSelect
+}: {
+  photo: Photo
+  token: string | null
+  isSelected: boolean
+  onToggleSelect: () => void
+}) {
+  const [imageError, setImageError] = useState(false)
+  const thumbnailUrl = token ? getThumbnailUrl(photo.drive_file_id, token, 100) : ""
+  const fullSizeUrl = token ? getThumbnailUrl(photo.drive_file_id, token, 1600) : ""
+
+  const getStatusBadge = () => {
+    switch (photo.face_status) {
+      case "completed":
+        return <span className="text-xs text-green-600 flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> เสร็จแล้ว</span>
+      case "processing":
+        return <span className="text-xs text-blue-600 flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> กำลังประมวลผล</span>
+      case "pending":
+        return <span className="text-xs text-yellow-600 flex items-center gap-1"><Clock className="h-3 w-3" /> รอประมวลผล</span>
+      case "failed":
+        return <span className="text-xs text-red-600 flex items-center gap-1"><AlertCircle className="h-3 w-3" /> ล้มเหลว</span>
+      default:
+        return null
+    }
+  }
+
+  return (
+    <div className={cn(
+      "flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors group",
+      isSelected && "bg-primary/5 ring-1 ring-primary/20"
+    )}>
+      <button
+        className="flex-shrink-0"
+        onClick={(e) => {
+          e.stopPropagation()
+          onToggleSelect()
+        }}
+      >
+        <div className={cn(
+          "h-5 w-5 rounded border flex items-center justify-center transition-all",
+          isSelected
+            ? "bg-primary border-primary text-white"
+            : "border-gray-300 hover:border-primary"
+        )}>
+          {isSelected && <Check className="h-3.5 w-3.5" strokeWidth={3} />}
+        </div>
+      </button>
+
+      <PhotoView src={fullSizeUrl}>
+        <div className="w-12 h-12 rounded overflow-hidden bg-muted flex-shrink-0 cursor-pointer">
+          {imageError || !token ? (
+            <div className="w-full h-full flex items-center justify-center">
+              <ImageOff className="h-4 w-4 text-muted-foreground/50" />
+            </div>
+          ) : (
+            <img
+              src={thumbnailUrl}
+              alt={photo.file_name}
+              className="w-full h-full object-cover"
+              onError={() => setImageError(true)}
+              loading="lazy"
+            />
+          )}
+        </div>
+      </PhotoView>
+
+      <div className="flex-1 min-w-0">
+        <p className="text-sm truncate">{photo.file_name}</p>
+        <div className="flex items-center gap-3 mt-0.5">
+          {getStatusBadge()}
+          {photo.face_count > 0 && (
+            <span className="text-xs text-muted-foreground flex items-center gap-1">
+              <Users className="h-3 w-3" /> {photo.face_count} ใบหน้า
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Folder card component - Grid view
+function FolderCardGrid({
+  name,
+  photoCount,
+  onClick,
+}: {
+  name: string
+  photoCount: number
+  onClick: () => void
+}) {
+  return (
+    <button
+      className="group text-left"
+      onClick={onClick}
+    >
+      <div className="aspect-square bg-muted/50 rounded-lg flex items-center justify-center transition-colors group-hover:bg-muted">
+        <Folder className="h-16 w-16 text-yellow-500 group-hover:scale-105 transition-transform" />
+      </div>
+      <p className="mt-1.5 text-sm truncate font-medium" title={name}>
+        {name}
+      </p>
+      <p className="text-xs text-muted-foreground">{photoCount} รูป</p>
+    </button>
+  )
+}
+
+// Folder card component - List view
+function FolderCardList({
+  name,
+  photoCount,
+  onClick,
+}: {
+  name: string
+  photoCount: number
+  onClick: () => void
+}) {
+  return (
+    <button
+      className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors text-left"
+      onClick={onClick}
+    >
+      <Folder className="h-10 w-10 text-yellow-500 flex-shrink-0" />
+      <div className="flex-1 min-w-0">
+        <p className="text-sm truncate font-medium">{name}</p>
+        <p className="text-xs text-muted-foreground">{photoCount} รูป</p>
+      </div>
+      <ChevronRight className="h-4 w-4 text-muted-foreground" />
+    </button>
+  )
+}
+
 export default function GalleryPage() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const { token } = useAuth()
-  const [selectedFolderId, setSelectedFolderId] = useState<string | undefined>()
-  const [selectedFolderName, setSelectedFolderName] = useState<string | undefined>()
-  const [selectedSubFolder, setSelectedSubFolder] = useState<string | undefined>()
-  const [selectedSubFolderName, setSelectedSubFolderName] = useState<string | undefined>()
-  const [page, setPage] = useState(1)
-  const [folderFilter, setFolderFilter] = useState("")
-  const limit = 24
 
-  // Multi-select state
+  // State
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    return (localStorage.getItem("gallery-view-mode") as ViewMode) || "grid"
+  })
+  const [selectedFolderId, setSelectedFolderId] = useState<string | undefined>()
+  const [currentPath, setCurrentPath] = useState<string | undefined>()
+  const [breadcrumbs, setBreadcrumbs] = useState<BreadcrumbItem[]>([])
+  const [page, setPage] = useState(1)
   const [selectedPhotos, setSelectedPhotos] = useState<Set<string>>(new Set())
-  const downloadMutation = useDownloadPhotos()
+  const limit = viewMode === "grid" ? 24 : 50
+
+  // Stores
   const downloadProgress = useDownloadProgressStore((state) => state.progress)
   const syncProgressMap = useSyncProgressStore((state) => state.progress)
 
-  // WebSocket connection is handled at layout level (PageLayout)
-
-  // Read folder from URL params on mount (only once)
-  useEffect(() => {
-    const folderParam = searchParams.get("folder")
-    const nameParam = searchParams.get("name")
-    if (folderParam && !selectedFolderId) {
-      setSelectedFolderId(folderParam)
-      setSelectedFolderName(nameParam || undefined)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
+  // Queries
   const { data: driveStatus, isLoading: statusLoading } = useDriveStatus()
   const { data: sharedFoldersData, isLoading: foldersLoading } = useSharedFolders(driveStatus?.connected)
   const sharedFolders = sharedFoldersData?.folders || []
 
-  // Get selected folder for sync status
-  const selectedFolder = sharedFolders.find(f => f.id === selectedFolderId)
-
-  // Get photos from selected folder (optionally filtered by subfolder)
   const { data: photosData, isLoading: photosLoading } = useFolderPhotos(
     selectedFolderId || "",
     page,
     limit,
     undefined,
     !!selectedFolderId,
-    selectedSubFolder
+    currentPath
   )
   const { data: stats, isLoading: statsLoading } = useFaceStats()
 
-  // Sync folder
+  // Mutations
   const triggerSyncMutation = useTriggerFolderSync()
-
-  // Retry failed photos
   const retryFailedMutation = useRetryFailedPhotos()
+  const downloadMutation = useDownloadPhotos()
 
-  // Build tree structure from folder paths (supports unlimited nesting levels)
-  interface TreeNode {
-    name: string
-    path: string
-    photoCount: number
-    children: TreeNode[]
-    folderId: string
-    syncStatus: string
-  }
+  // Save view mode preference
+  useEffect(() => {
+    localStorage.setItem("gallery-view-mode", viewMode)
+  }, [viewMode])
 
-  const buildFolderTree = useCallback(() => {
-    const trees: TreeNode[] = []
-
-    sharedFolders.forEach(folder => {
-      // Create root node for each shared folder
-      const rootNode: TreeNode = {
-        name: folder.drive_folder_name,
-        path: '',
-        photoCount: folder.photo_count,
-        children: [],
-        folderId: folder.id,
-        syncStatus: folder.sync_status,
-      }
-
-      // Build tree from children paths
-      const pathMap = new Map<string, TreeNode>()
-      pathMap.set('', rootNode)
-
-      // Sort children by path to ensure parents are created before children
-      const sortedChildren = [...(folder.children || [])].sort((a, b) =>
-        a.path.localeCompare(b.path)
-      )
-
-      sortedChildren.forEach(child => {
-        const pathParts = child.path.split('/')
-        let currentPath = ''
-        let parentNode = rootNode
-
-        // Navigate/create path to this node
-        for (let i = 1; i < pathParts.length; i++) { // Skip first part (root folder name)
-          const part = pathParts[i]
-          const newPath = currentPath ? `${currentPath}/${part}` : part
-
-          let node = pathMap.get(newPath)
-          if (!node) {
-            node = {
-              name: part,
-              path: child.path, // Use full path for leaf nodes
-              photoCount: 0,
-              children: [],
-              folderId: folder.id,
-              syncStatus: folder.sync_status,
-            }
-            pathMap.set(newPath, node)
-            parentNode.children.push(node)
-          }
-
-          // Update photo count for leaf node
-          if (i === pathParts.length - 1) {
-            node.photoCount = child.photo_count
-            node.path = child.path
-          }
-
-          parentNode = node
-          currentPath = newPath
-        }
-      })
-
-      trees.push(rootNode)
-    })
-
-    return trees
-  }, [sharedFolders])
-
-  const folderTree = buildFolderTree()
-
-  // Filter tree by search term (flatten and filter, then show matching items)
-  const filterTree = useCallback((nodes: TreeNode[], filter: string): TreeNode[] => {
-    if (!filter) return nodes
-    const lowerFilter = filter.toLowerCase()
-
-    const filterNode = (node: TreeNode): TreeNode | null => {
-      const nameMatches = node.name.toLowerCase().includes(lowerFilter)
-      const filteredChildren = node.children.map(filterNode).filter(Boolean) as TreeNode[]
-
-      if (nameMatches || filteredChildren.length > 0) {
-        return { ...node, children: filteredChildren }
-      }
-      return null
+  // Read folder from URL on mount
+  useEffect(() => {
+    const folderParam = searchParams.get("folder")
+    const pathParam = searchParams.get("path")
+    if (folderParam && !selectedFolderId) {
+      setSelectedFolderId(folderParam)
+      setCurrentPath(pathParam || undefined)
     }
-
-    return nodes.map(filterNode).filter(Boolean) as TreeNode[]
   }, [])
 
-  const filteredTree = filterTree(folderTree, folderFilter)
-
-  // Auto-select first folder if none selected
+  // Auto-select first folder
   useEffect(() => {
     if (!selectedFolderId && sharedFolders.length > 0 && !searchParams.get("folder")) {
-      const firstFolder = sharedFolders[0]
-      setSelectedFolderId(firstFolder.id)
-      setSelectedFolderName(firstFolder.drive_folder_name)
+      setSelectedFolderId(sharedFolders[0].id)
     }
   }, [sharedFolders, selectedFolderId, searchParams])
 
-  // Unified handler for tree node selection (works for both root folders and subfolders)
-  const handleTreeSelect = (folderId: string, path: string | undefined, name: string) => {
-    const isCurrentlySelected = selectedFolderId === folderId && selectedSubFolder === path
-
-    if (isCurrentlySelected) {
-      // Deselect - clear all
-      setSelectedFolderId(undefined)
-      setSelectedFolderName(undefined)
-      setSelectedSubFolder(undefined)
-      setSelectedSubFolderName(undefined)
-      setSearchParams({}, { replace: true })
-    } else {
-      // Select
-      setSelectedFolderId(folderId)
-      setSelectedFolderName(name)
-      setSelectedSubFolder(path)
-      setSelectedSubFolderName(path ? name : undefined)
-      setSearchParams({ folder: folderId, name }, { replace: true })
+  // Build breadcrumbs
+  useEffect(() => {
+    if (!selectedFolderId) {
+      setBreadcrumbs([])
+      return
     }
+
+    const folder = sharedFolders.find(f => f.id === selectedFolderId)
+    if (!folder) return
+
+    const crumbs: BreadcrumbItem[] = [
+      { id: folder.id, name: folder.drive_folder_name, path: undefined }
+    ]
+
+    if (currentPath) {
+      const pathParts = currentPath.split("/").filter(Boolean)
+      // Skip the first part (root folder name)
+      let buildPath = ""
+      for (let i = 1; i < pathParts.length; i++) {
+        buildPath = buildPath ? `${buildPath}/${pathParts[i]}` : pathParts[i]
+        crumbs.push({
+          id: folder.id,
+          name: pathParts[i],
+          path: `${folder.drive_folder_name}/${buildPath}`
+        })
+      }
+    }
+
+    setBreadcrumbs(crumbs)
+  }, [selectedFolderId, currentPath, sharedFolders])
+
+  // Get current folder's subfolders
+  const getCurrentSubfolders = useCallback((): SubFolderInfo[] => {
+    if (!selectedFolderId) return []
+
+    const folder = sharedFolders.find(f => f.id === selectedFolderId)
+    if (!folder?.children) return []
+
+    // Filter subfolders at current level
+    const currentPrefix = currentPath ? `${currentPath}/` : `${folder.drive_folder_name}/`
+
+    return folder.children.filter(child => {
+      // Must start with current path
+      if (!child.path.startsWith(currentPrefix.slice(0, -1))) return false
+
+      // Get the remaining path after current prefix
+      const remaining = child.path.slice(currentPrefix.length)
+
+      // Only direct children (no more slashes)
+      return remaining && !remaining.includes("/")
+    }).map(child => ({
+      ...child,
+      name: child.path.split("/").pop() || child.name
+    }))
+  }, [selectedFolderId, currentPath, sharedFolders])
+
+  const subfolders = getCurrentSubfolders()
+
+  // Navigation handlers
+  const handleFolderSelect = (folderId: string, folderName: string) => {
+    setSelectedFolderId(folderId)
+    setCurrentPath(undefined)
     setPage(1)
     setSelectedPhotos(new Set())
+    setSearchParams({ folder: folderId }, { replace: true })
   }
 
-  // Multi-select handlers
+  const handleSubfolderClick = (subfolder: SubFolderInfo) => {
+    setCurrentPath(subfolder.path)
+    setPage(1)
+    setSelectedPhotos(new Set())
+    setSearchParams({
+      folder: selectedFolderId!,
+      path: subfolder.path
+    }, { replace: true })
+  }
+
+  const handleBreadcrumbClick = (crumb: BreadcrumbItem) => {
+    setCurrentPath(crumb.path)
+    setPage(1)
+    setSelectedPhotos(new Set())
+    if (crumb.path) {
+      setSearchParams({ folder: crumb.id, path: crumb.path }, { replace: true })
+    } else {
+      setSearchParams({ folder: crumb.id }, { replace: true })
+    }
+  }
+
+  const handleHomeClick = () => {
+    setSelectedFolderId(undefined)
+    setCurrentPath(undefined)
+    setBreadcrumbs([])
+    setPage(1)
+    setSelectedPhotos(new Set())
+    setSearchParams({}, { replace: true })
+  }
+
+  // Selection handlers
   const togglePhotoSelection = useCallback((driveFileId: string) => {
     setSelectedPhotos(prev => {
       const newSet = new Set(prev)
@@ -490,22 +483,21 @@ export default function GalleryPage() {
     downloadMutation.mutate(Array.from(selectedPhotos))
   }, [selectedPhotos, downloadMutation])
 
-  // Reset selection when page changes
+  // Reset selection on page change
   useEffect(() => {
     setSelectedPhotos(new Set())
   }, [page])
 
-  // Get selected folder's sync status and progress
+  // Computed values
+  const selectedFolder = sharedFolders.find(f => f.id === selectedFolderId)
   const syncProgress = selectedFolderId ? syncProgressMap[selectedFolderId] : undefined
   const isSyncing = selectedFolder?.sync_status === 'syncing' || !!syncProgress
   const totalPages = photosData ? Math.ceil(photosData.total / limit) : 0
-
-  // Selection computed values
   const photos = photosData?.photos || []
   const allSelected = photos.length > 0 && photos.every(p => selectedPhotos.has(p.drive_file_id))
   const someSelected = selectedPhotos.size > 0
 
-  // Not connected or no folders state
+  // Not connected or no folders
   if (!statusLoading && !foldersLoading && (!driveStatus?.connected || sharedFolders.length === 0)) {
     return (
       <div className="space-y-6">
@@ -530,31 +522,140 @@ export default function GalleryPage() {
     )
   }
 
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex-1">
-          <h1 className="text-2xl font-semibold">คลังรูปภาพ</h1>
-          <p className="text-sm text-muted-foreground">
-            {photosData ? `${photosData.total} รูปภาพ` : "กำลังโหลด..."}
-            {selectedSubFolderName ? ` ใน "${selectedSubFolderName}"` : selectedFolderName && ` ใน "${selectedFolderName}"`}
-          </p>
+  // Home view - show all shared folders
+  if (!selectedFolderId) {
+    return (
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold">คลังรูปภาพ</h1>
+            <p className="text-sm text-muted-foreground">
+              {sharedFolders.length} โฟลเดอร์ | {stats?.total_photos || 0} รูปภาพ
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setViewMode(viewMode === "grid" ? "list" : "grid")}
+            >
+              {viewMode === "grid" ? <List className="h-4 w-4" /> : <LayoutGrid className="h-4 w-4" />}
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => navigate("/settings")}>
+              <Settings className="h-4 w-4 mr-2" />
+              จัดการโฟลเดอร์
+            </Button>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
+
+        {/* Quick Stats */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="p-4 rounded-lg border bg-card">
+            <p className="text-xs text-muted-foreground">รูปภาพทั้งหมด</p>
+            <p className="text-2xl font-semibold">{stats?.total_photos || 0}</p>
+          </div>
+          <div className="p-4 rounded-lg border bg-card">
+            <p className="text-xs text-muted-foreground">ประมวลผลแล้ว</p>
+            <p className="text-2xl font-semibold text-green-600">{stats?.processed_photos || 0}</p>
+          </div>
+          <div className="p-4 rounded-lg border bg-card">
+            <p className="text-xs text-muted-foreground">รอประมวลผล</p>
+            <p className="text-2xl font-semibold text-yellow-600">{stats?.pending_photos || 0}</p>
+          </div>
+          <div className="p-4 rounded-lg border bg-card">
+            <p className="text-xs text-muted-foreground">ใบหน้าที่พบ</p>
+            <p className="text-2xl font-semibold text-primary">{stats?.total_faces || 0}</p>
+          </div>
+        </div>
+
+        <Separator />
+
+        {/* Folders */}
+        {foldersLoading ? (
+          <div className={cn(
+            "gap-4",
+            viewMode === "grid"
+              ? "grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6"
+              : "space-y-2"
+          )}>
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className={cn(
+                "bg-muted rounded-lg animate-pulse",
+                viewMode === "grid" ? "aspect-square" : "h-16"
+              )} />
+            ))}
+          </div>
+        ) : viewMode === "grid" ? (
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+            {sharedFolders.map(folder => (
+              <FolderCardGrid
+                key={folder.id}
+                name={folder.drive_folder_name}
+                photoCount={folder.photo_count}
+                onClick={() => handleFolderSelect(folder.id, folder.drive_folder_name)}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-1">
+            {sharedFolders.map(folder => (
+              <FolderCardList
+                key={folder.id}
+                name={folder.drive_folder_name}
+                photoCount={folder.photo_count}
+                onClick={() => handleFolderSelect(folder.id, folder.drive_folder_name)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // Folder view - show contents
+  return (
+    <div className="space-y-4">
+      {/* Breadcrumb & Actions */}
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-1 text-sm min-w-0 overflow-hidden">
+          <button
+            onClick={handleHomeClick}
+            className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
+          >
+            <Home className="h-4 w-4" />
+          </button>
+          {breadcrumbs.map((crumb, idx) => (
+            <div key={`${crumb.id}-${crumb.path || 'root'}`} className="flex items-center gap-1 min-w-0">
+              <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+              {idx === breadcrumbs.length - 1 ? (
+                <span className="font-medium truncate">{crumb.name}</span>
+              ) : (
+                <button
+                  onClick={() => handleBreadcrumbClick(crumb)}
+                  className="text-muted-foreground hover:text-foreground transition-colors truncate"
+                >
+                  {crumb.name}
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {/* Selected actions */}
           {someSelected && (
             <>
               <Button
                 size="sm"
                 variant="outline"
                 onClick={() => {
-                  // Store selected photos data in sessionStorage for news-writer
                   const selectedPhotoData = photos.filter(p => selectedPhotos.has(p.drive_file_id))
                   sessionStorage.setItem('newsWriterPhotos', JSON.stringify(selectedPhotoData))
                   navigate('/news-writer')
                 }}
               >
-                <Newspaper className="h-4 w-4 mr-2" />
+                <Newspaper className="h-4 w-4 mr-1" />
                 เขียนข่าว ({selectedPhotos.size})
               </Button>
               <Button
@@ -562,312 +663,222 @@ export default function GalleryPage() {
                 variant="outline"
                 onClick={handleDownload}
                 disabled={downloadMutation.isPending}
-                className="min-w-[180px]"
               >
                 {downloadMutation.isPending ? (
                   <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    {downloadProgress
-                      ? `${downloadProgress.current}/${downloadProgress.total} ไฟล์`
-                      : 'กำลังเตรียม...'}
+                    <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                    {downloadProgress ? `${downloadProgress.current}/${downloadProgress.total}` : '...'}
                   </>
                 ) : (
                   <>
-                    <Download className="h-4 w-4 mr-2" />
+                    <Download className="h-4 w-4 mr-1" />
                     ดาวน์โหลด ({selectedPhotos.size})
                   </>
                 )}
               </Button>
             </>
           )}
+
+          {/* View toggle */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setViewMode(viewMode === "grid" ? "list" : "grid")}
+          >
+            {viewMode === "grid" ? <List className="h-4 w-4" /> : <LayoutGrid className="h-4 w-4" />}
+          </Button>
+
+          {/* Sync button */}
           <Button
             size="sm"
-            onClick={() => selectedFolderId && triggerSyncMutation.mutate(selectedFolderId)}
-            disabled={isSyncing || triggerSyncMutation.isPending || !selectedFolderId}
-            className="min-w-[120px]"
+            onClick={() => triggerSyncMutation.mutate(selectedFolderId)}
+            disabled={isSyncing || triggerSyncMutation.isPending}
           >
             {isSyncing ? (
               <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                {syncProgress ? `กำลัง Sync ${syncProgress.percent}%` : 'กำลัง Sync...'}
+                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                {syncProgress ? `${syncProgress.percent}%` : 'Sync...'}
               </>
             ) : (
               <>
-                <RefreshCw className="h-4 w-4 mr-2" />
+                <RefreshCw className="h-4 w-4 mr-1" />
                 Sync
               </>
             )}
           </Button>
-          {/* Retry Failed Button - only show if there are failed photos */}
-          {(stats?.failed_photos || 0) > 0 && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => retryFailedMutation.mutate(undefined)}
-              disabled={retryFailedMutation.isPending}
-              className="text-destructive border-destructive/50 hover:bg-destructive/10"
-            >
-              {retryFailedMutation.isPending ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  กำลัง Retry...
-                </>
-              ) : (
-                <>
-                  <RotateCcw className="h-4 w-4 mr-2" />
-                  Retry ({stats?.failed_photos})
-                </>
-              )}
-            </Button>
-          )}
-        </div>
-      </div>
 
-      {/* Key Metrics */}
-      <div className={cn(
-        "grid gap-4",
-        (stats?.failed_photos || 0) > 0
-          ? "grid-cols-2 lg:grid-cols-6"
-          : "grid-cols-2 lg:grid-cols-5"
-      )}>
-        <MetricItem
-          label="โฟลเดอร์"
-          value={sharedFolders.length}
-          icon={<FolderTree className="h-3.5 w-3.5" />}
-          isLoading={foldersLoading}
-        />
-        <MetricItem
-          label="รูปภาพทั้งหมด"
-          value={stats?.total_photos || 0}
-          icon={<Images className="h-3.5 w-3.5" />}
-          isLoading={statsLoading}
-        />
-        <MetricItem
-          label="ประมวลผลแล้ว"
-          value={stats?.processed_photos || 0}
-          icon={<CheckCircle2 className="h-3.5 w-3.5" />}
-          isLoading={statsLoading}
-        />
-        <MetricItem
-          label="รอประมวลผล"
-          value={stats?.pending_photos || 0}
-          icon={<Clock className="h-3.5 w-3.5" />}
-          isLoading={statsLoading}
-        />
-        {(stats?.failed_photos || 0) > 0 && (
-          <MetricItem
-            label="ล้มเหลว"
-            value={stats?.failed_photos || 0}
-            icon={<AlertTriangle className="h-3.5 w-3.5 text-destructive" />}
-            isLoading={statsLoading}
-          />
-        )}
-        <MetricItem
-          label="ใบหน้าที่พบ"
-          value={stats?.total_faces || 0}
-          icon={<Users className="h-3.5 w-3.5" />}
-          isLoading={statsLoading}
-        />
+          {/* More actions */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm">
+                <Settings className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => navigate("/face-search")}>
+                <Search className="h-4 w-4 mr-2" />
+                ค้นหาใบหน้า
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate("/settings")}>
+                <FolderOpen className="h-4 w-4 mr-2" />
+                จัดการโฟลเดอร์
+              </DropdownMenuItem>
+              {(stats?.failed_photos || 0) > 0 && (
+                <DropdownMenuItem
+                  onClick={() => retryFailedMutation.mutate(undefined)}
+                  disabled={retryFailedMutation.isPending}
+                  className="text-destructive"
+                >
+                  <RotateCcw className="h-4 w-4 mr-2" />
+                  Retry ล้มเหลว ({stats?.failed_photos})
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
 
       <Separator />
 
-      {/* Main Content */}
-      <div className="grid grid-cols-12 gap-6">
-        {/* Sidebar - Shared Folders */}
-        <div className="col-span-12 lg:col-span-2">
-          <div className="space-y-2">
-            <h3 className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-              <FolderTree className="h-3.5 w-3.5" />
-              โฟลเดอร์ ({sharedFolders.length})
-            </h3>
-
-            {/* Folder Filter Input - minimal style */}
-            <div className="relative">
-              <input
-                type="text"
-                placeholder="ค้นหาโฟลเดอร์..."
-                value={folderFilter}
-                onChange={(e) => setFolderFilter(e.target.value)}
-                className="w-full text-xs bg-transparent border-0 border-b border-muted-foreground/30 focus:border-primary focus:outline-none py-1.5 px-1 placeholder:text-muted-foreground/50 transition-colors"
-              />
-              {folderFilter && (
-                <button
-                  onClick={() => setFolderFilter("")}
-                  className="absolute right-1 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              )}
-            </div>
-
-            {foldersLoading ? (
-              <div className="space-y-1">
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <div key={i} className="h-6 bg-muted rounded animate-pulse" />
-                ))}
-              </div>
-            ) : filteredTree.length > 0 ? (
-              <div className="space-y-0.5 max-h-[400px] overflow-y-auto">
-                {filteredTree.map((node) => (
-                  <TreeNodeItem
-                    key={node.folderId}
-                    node={node as FolderTreeNode}
-                    selectedFolderId={selectedFolderId}
-                    selectedPath={selectedSubFolder}
-                    onSelect={handleTreeSelect}
-                    onSync={(folderId) => triggerSyncMutation.mutate(folderId)}
-                    isSyncing={triggerSyncMutation.isPending || !!syncProgressMap[node.folderId]}
-                    syncProgress={syncProgressMap[node.folderId]}
-                  />
-                ))}
-              </div>
-            ) : (
-              <p className="text-xs text-muted-foreground text-center py-4">
-                {folderFilter ? `ไม่พบ "${folderFilter}"` : "ไม่มีโฟลเดอร์"}
-              </p>
-            )}
-          </div>
-
-          <Separator className="my-4" />
-
-          {/* Quick Links */}
-          <div className="space-y-2">
-            <h3 className="text-xs font-medium text-muted-foreground">เมนูลัด</h3>
-            <div className="space-y-1">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-full justify-start h-7 text-xs"
-                onClick={() => navigate("/face-search")}
-              >
-                <Search className="h-3.5 w-3.5 mr-1.5" />
-                ค้นหาใบหน้า
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-full justify-start h-7 text-xs"
-                onClick={() => navigate("/settings")}
-              >
-                <FolderOpen className="h-3.5 w-3.5 mr-1.5" />
-                ตั้งค่าโฟลเดอร์
-              </Button>
-            </div>
-          </div>
+      {/* Content */}
+      {photosLoading ? (
+        <div className={cn(
+          "gap-3",
+          viewMode === "grid"
+            ? "grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6"
+            : "space-y-1"
+        )}>
+          {Array.from({ length: 18 }).map((_, i) => (
+            <div key={i} className={cn(
+              "bg-muted rounded-lg animate-pulse",
+              viewMode === "grid" ? "aspect-square" : "h-16"
+            )} />
+          ))}
         </div>
-
-        {/* Photo Grid */}
-        <div className="col-span-12 lg:col-span-10">
-          {photosLoading ? (
-            <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-              {Array.from({ length: 18 }).map((_, i) => (
-                <div key={i}>
-                  <div className="aspect-square bg-muted rounded-lg animate-pulse" />
-                  <div className="h-3 bg-muted rounded mt-1.5 w-3/4 animate-pulse" />
+      ) : (
+        <div className="space-y-4">
+          {/* Select all / info */}
+          {photos.length > 0 && (
+            <div className="flex items-center justify-between text-sm">
+              <button
+                onClick={toggleSelectAll}
+                className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <div className={cn(
+                  "h-4 w-4 rounded border flex items-center justify-center",
+                  allSelected ? "bg-primary border-primary text-white" : "border-gray-300"
+                )}>
+                  {allSelected && <Check className="h-3 w-3" strokeWidth={3} />}
                 </div>
+                เลือกทั้งหมด
+              </button>
+              <span className="text-muted-foreground">
+                {photosData?.total || 0} รูป {subfolders.length > 0 && `| ${subfolders.length} โฟลเดอร์`}
+                {totalPages > 1 && ` | หน้า ${page}/${totalPages}`}
+              </span>
+            </div>
+          )}
+
+          {/* Subfolders */}
+          {subfolders.length > 0 && (
+            <div className={cn(
+              viewMode === "grid"
+                ? "grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3"
+                : "space-y-1"
+            )}>
+              {subfolders.map(subfolder => (
+                viewMode === "grid" ? (
+                  <FolderCardGrid
+                    key={subfolder.path}
+                    name={subfolder.name}
+                    photoCount={subfolder.photo_count}
+                    onClick={() => handleSubfolderClick(subfolder)}
+                  />
+                ) : (
+                  <FolderCardList
+                    key={subfolder.path}
+                    name={subfolder.name}
+                    photoCount={subfolder.photo_count}
+                    onClick={() => handleSubfolderClick(subfolder)}
+                  />
+                )
               ))}
             </div>
-          ) : photosData && photosData.photos.length > 0 ? (
-            <div className="space-y-4">
-              {/* Select All Header */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={toggleSelectAll}
-                    className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    {allSelected ? (
-                      <CheckSquare className="h-4 w-4 text-primary" />
-                    ) : (
-                      <Square className="h-4 w-4" />
-                    )}
-                    เลือกทั้งหมด ({photos.length})
-                  </button>
-                  {someSelected && (
-                    <span className="text-xs text-muted-foreground">
-                      เลือก {selectedPhotos.size} รูป
-                    </span>
-                  )}
-                </div>
-                {/* Page indicator */}
-                {totalPages > 1 && (
-                  <span className="text-xs text-muted-foreground">
-                    หน้า {page} / {totalPages}
-                  </span>
-                )}
-              </div>
+          )}
 
-              {/* Photo Grid with PhotoProvider */}
-              <PhotoProvider
-                maskOpacity={0.9}
-                toolbarRender={({ onScale, scale }) => (
-                  <div className="flex items-center gap-2">
-                    <button
-                      className="p-2 text-white/80 hover:text-white"
-                      onClick={() => onScale(scale + 0.5)}
-                    >
-                      <ZoomIn className="h-5 w-5" />
-                    </button>
-                    <button
-                      className="p-2 text-white/80 hover:text-white"
-                      onClick={() => onScale(scale - 0.5)}
-                    >
-                      <X className="h-5 w-5" />
-                    </button>
-                  </div>
-                )}
-              >
-                <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                  {photos.map((photo) => (
-                    <PhotoCard
+          {/* Photos */}
+          {photos.length > 0 ? (
+            <PhotoProvider
+              maskOpacity={0.9}
+              toolbarRender={({ onScale, scale }) => (
+                <div className="flex items-center gap-2">
+                  <button className="p-2 text-white/80 hover:text-white" onClick={() => onScale(scale + 0.5)}>
+                    <ZoomIn className="h-5 w-5" />
+                  </button>
+                </div>
+              )}
+            >
+              <div className={cn(
+                viewMode === "grid"
+                  ? "grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3"
+                  : "space-y-1"
+              )}>
+                {photos.map(photo => (
+                  viewMode === "grid" ? (
+                    <PhotoCardGrid
                       key={photo.id}
                       photo={photo}
                       token={token}
                       isSelected={selectedPhotos.has(photo.drive_file_id)}
                       onToggleSelect={() => togglePhotoSelection(photo.drive_file_id)}
                     />
-                  ))}
-                </div>
-              </PhotoProvider>
-
-              {/* Pagination */}
-              {totalPages > 1 && (
-                <div className="flex items-center justify-center gap-2 mt-6">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setPage(page - 1)}
-                    disabled={page === 1}
-                  >
-                    ก่อนหน้า
-                  </Button>
-                  <span className="text-xs text-muted-foreground">
-                    หน้า {page} / {totalPages}
-                  </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setPage(page + 1)}
-                    disabled={page >= totalPages}
-                  >
-                    ถัดไป
-                  </Button>
-                </div>
-              )}
-            </div>
-          ) : (
+                  ) : (
+                    <PhotoCardList
+                      key={photo.id}
+                      photo={photo}
+                      token={token}
+                      isSelected={selectedPhotos.has(photo.drive_file_id)}
+                      onToggleSelect={() => togglePhotoSelection(photo.drive_file_id)}
+                    />
+                  )
+                ))}
+              </div>
+            </PhotoProvider>
+          ) : subfolders.length === 0 && (
             <div className="py-12 text-center">
               <Images className="mx-auto h-10 w-10 text-muted-foreground/50" />
               <p className="mt-4 text-sm text-muted-foreground">
-                {selectedFolderName
-                  ? `ไม่พบรูปภาพในโฟลเดอร์ "${selectedFolderName}"`
-                  : "ยังไม่มีรูปภาพ กด Sync เพื่อดึงรูปจาก Google Drive"}
+                ไม่พบรูปภาพในโฟลเดอร์นี้
               </p>
             </div>
           )}
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-2 pt-4">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage(page - 1)}
+                disabled={page === 1}
+              >
+                ก่อนหน้า
+              </Button>
+              <span className="text-sm text-muted-foreground px-4">
+                หน้า {page} / {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage(page + 1)}
+                disabled={page >= totalPages}
+              >
+                ถัดไป
+              </Button>
+            </div>
+          )}
         </div>
-      </div>
+      )}
     </div>
   )
 }
