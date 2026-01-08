@@ -91,6 +91,30 @@ definitions:
       photo_count:
         type: integer
     type: object
+  handlers.ComponentHealth:
+    properties:
+      latency:
+        type: string
+      message:
+        type: string
+      status:
+        description: '"ok", "error", "unavailable"'
+        type: string
+    type: object
+  handlers.DetailedHealthResponse:
+    properties:
+      components:
+        additionalProperties:
+          $ref: '#/definitions/handlers.ComponentHealth'
+        type: object
+      metrics:
+        $ref: '#/definitions/handlers.HealthMetrics'
+      status:
+        description: '"healthy", "degraded", "unhealthy"'
+        type: string
+      timestamp:
+        type: string
+    type: object
   handlers.GenerateNewsRequest:
     properties:
       headings:
@@ -109,6 +133,19 @@ definitions:
       tone:
         description: formal, friendly, news
         type: string
+    type: object
+  handlers.HealthMetrics:
+    properties:
+      failed_photos:
+        type: integer
+      pending_photos:
+        type: integer
+      processing_photos:
+        type: integer
+      stuck_photos:
+        type: integer
+      total_photos:
+        type: integer
     type: object
   handlers.ResetPhotosRequest:
     properties:
@@ -143,13 +180,22 @@ definitions:
     type: object
 info:
   contact:
-    email: support@example.com
-    name: API Support
-  description: API สำหรับระบบจัดการรูปภาพและโฟลเดอร์ Google Drive
+    email: support@ku-directory.com
+    name: ทีมพัฒนา KU Directory
+  description: |-
+    ระบบจัดการรูปภาพและโฟลเดอร์ Google Drive สำหรับมหาวิทยาลัยเกษตรศาสตร์
+
+    ## ความสามารถหลัก
+    - **การจัดการโฟลเดอร์** - เชื่อมต่อและซิงค์กับ Google Drive
+    - **การค้นหาใบหน้า** - ค้นหารูปภาพจากใบหน้าด้วย AI
+    - **การสร้างข่าว** - สร้างข่าวอัตโนมัติจากรูปภาพด้วย Gemini AI
+    - **การจัดการผู้ใช้** - ระบบสมาชิกและสิทธิ์การเข้าถึง
+
+    ## การยืนยันตัวตน
+    ใช้ JWT Token ในการยืนยันตัวตน โดยส่ง Token ใน Header `Authorization: Bearer <token>`
   license:
     name: MIT
     url: https://opensource.org/licenses/MIT
-  termsOfService: http://swagger.io/terms/
   title: KU Directory API
   version: "1.0"
 paths:
@@ -612,14 +658,29 @@ paths:
       summary: Register webhook for folder
       tags:
       - Folders
+  /health/detailed:
+    get:
+      consumes:
+      - application/json
+      description: Returns detailed health status of all system components
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.DetailedHealthResponse'
+      summary: Get detailed system health
+      tags:
+      - Health
 securityDefinitions:
   AdminToken:
-    description: Admin token for log access
+    description: Token สำหรับผู้ดูแลระบบ ใช้เข้าถึง Log และฟังก์ชันพิเศษ
     in: header
     name: X-Admin-Token
     type: apiKey
   BearerAuth:
-    description: Type "Bearer" followed by a space and JWT token.
+    description: ใส่ "Bearer" ตามด้วยช่องว่างและ JWT Token เช่น "Bearer eyJhbGc..."
     in: header
     name: Authorization
     type: apiKey

@@ -6,9 +6,9 @@ import (
 	"gofiber-template/pkg/config"
 )
 
-func SetupRoutes(app *fiber.App, h *handlers.Handlers, cfg *config.Config) {
+func SetupRoutes(app *fiber.App, h *handlers.Handlers, healthHandler *handlers.HealthHandler, cfg *config.Config) {
 	// Setup health and root routes
-	SetupHealthRoutes(app)
+	SetupHealthRoutes(app, healthHandler)
 
 	// API version group
 	api := app.Group("/api/v1")

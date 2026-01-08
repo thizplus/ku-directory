@@ -2,13 +2,14 @@ package main
 
 import (
 	"fmt"
+	"html/template"
 	"os"
 	"os/signal"
 	"syscall"
 
 	"github.com/gofiber/fiber/v2"
-	swagger "github.com/swaggo/fiber-swagger"
-	"gofiber-template/docs"
+	"github.com/yokeTH/gofiber-scalar/scalar/v2"
+	_ "gofiber-template/docs"
 	"gofiber-template/interfaces/api/handlers"
 	"gofiber-template/interfaces/api/middleware"
 	"gofiber-template/interfaces/api/routes"
@@ -18,11 +19,19 @@ import (
 
 // @title KU Directory API
 // @version 1.0
-// @description API สำหรับระบบจัดการรูปภาพและโฟลเดอร์ Google Drive
-// @termsOfService http://swagger.io/terms/
+// @description ระบบจัดการรูปภาพและโฟลเดอร์ Google Drive สำหรับมหาวิทยาลัยเกษตรศาสตร์
+// @description
+// @description ## ความสามารถหลัก
+// @description - **การจัดการโฟลเดอร์** - เชื่อมต่อและซิงค์กับ Google Drive
+// @description - **การค้นหาใบหน้า** - ค้นหารูปภาพจากใบหน้าด้วย AI
+// @description - **การสร้างข่าว** - สร้างข่าวอัตโนมัติจากรูปภาพด้วย Gemini AI
+// @description - **การจัดการผู้ใช้** - ระบบสมาชิกและสิทธิ์การเข้าถึง
+// @description
+// @description ## การยืนยันตัวตน
+// @description ใช้ JWT Token ในการยืนยันตัวตน โดยส่ง Token ใน Header `Authorization: Bearer <token>`
 
-// @contact.name API Support
-// @contact.email support@example.com
+// @contact.name ทีมพัฒนา KU Directory
+// @contact.email support@ku-directory.com
 
 // @license.name MIT
 // @license.url https://opensource.org/licenses/MIT
@@ -32,12 +41,12 @@ import (
 // @securityDefinitions.apikey BearerAuth
 // @in header
 // @name Authorization
-// @description Type "Bearer" followed by a space and JWT token.
+// @description ใส่ "Bearer" ตามด้วยช่องว่างและ JWT Token เช่น "Bearer eyJhbGc..."
 
 // @securityDefinitions.apikey AdminToken
 // @in header
 // @name X-Admin-Token
-// @description Admin token for log access
+// @description Token สำหรับผู้ดูแลระบบ ใช้เข้าถึง Log และฟังก์ชันพิเศษ
 
 func main() {
 	// Initialize logger
@@ -86,12 +95,33 @@ func main() {
 	repos := container.GetHandlerRepositories()
 	h := handlers.NewHandlers(services, repos, container.GetConfig())
 
-	// Setup routes
-	routes.SetupRoutes(app, h, container.GetConfig())
+	// Create health handler (for detailed health check)
+	healthHandler := handlers.NewHealthHandler(
+		container.DB,
+		container.RedisClient,
+		container.FaceClient,
+		container.PhotoRepository,
+	)
 
-	// Setup Swagger - use empty host so it works on any domain
-	docs.SwaggerInfo.Host = ""
-	app.Get("/swagger/*", swagger.WrapHandler)
+	// Setup routes
+	routes.SetupRoutes(app, h, healthHandler, container.GetConfig())
+
+	// Setup Scalar API Documentation (modern alternative to Swagger UI)
+	// Custom CSS for Google Fonts (Google Sans + Roboto)
+	customCSS := template.CSS(`
+		@import url('https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&display=swap');
+		@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap');
+		@import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500&display=swap');
+		:root {
+			--scalar-font: 'Roboto', 'Google Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+			--scalar-font-code: 'Roboto Mono', monospace;
+		}
+	`)
+	app.Get("/docs/*", scalar.New(scalar.Config{
+		Title:       "KU Directory API",
+		Theme:       scalar.ThemeDeepSpace,
+		CustomStyle: customCSS,
+	}))
 
 	// Start server
 	port := container.GetConfig().App.Port
@@ -100,7 +130,7 @@ func main() {
 		"environment": container.GetConfig().App.Env,
 		"health":      fmt.Sprintf("http://localhost:%s/health", port),
 		"api":         fmt.Sprintf("http://localhost:%s/api/v1", port),
-		"swagger":     fmt.Sprintf("http://localhost:%s/swagger/index.html", port),
+		"docs":        fmt.Sprintf("http://localhost:%s/docs", port),
 		"websocket":   fmt.Sprintf("ws://localhost:%s/ws", port),
 		"logs_api":    fmt.Sprintf("http://localhost:%s/api/v1/admin/logs", port),
 	})

@@ -9,10 +9,9 @@ const docTemplate = `{
     "info": {
         "description": "{{escape .Description}}",
         "title": "{{.Title}}",
-        "termsOfService": "http://swagger.io/terms/",
         "contact": {
-            "name": "API Support",
-            "email": "support@example.com"
+            "name": "ทีมพัฒนา KU Directory",
+            "email": "support@ku-directory.com"
         },
         "license": {
             "name": "MIT",
@@ -757,6 +756,29 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/health/detailed": {
+            "get": {
+                "description": "Returns detailed health status of all system components",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Health"
+                ],
+                "summary": "Get detailed system health",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.DetailedHealthResponse"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -899,6 +921,42 @@ const docTemplate = `{
                 }
             }
         },
+        "handlers.ComponentHealth": {
+            "type": "object",
+            "properties": {
+                "latency": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "status": {
+                    "description": "\"ok\", \"error\", \"unavailable\"",
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.DetailedHealthResponse": {
+            "type": "object",
+            "properties": {
+                "components": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "#/definitions/handlers.ComponentHealth"
+                    }
+                },
+                "metrics": {
+                    "$ref": "#/definitions/handlers.HealthMetrics"
+                },
+                "status": {
+                    "description": "\"healthy\", \"degraded\", \"unhealthy\"",
+                    "type": "string"
+                },
+                "timestamp": {
+                    "type": "string"
+                }
+            }
+        },
         "handlers.GenerateNewsRequest": {
             "type": "object",
             "properties": {
@@ -923,6 +981,26 @@ const docTemplate = `{
                 "tone": {
                     "description": "formal, friendly, news",
                     "type": "string"
+                }
+            }
+        },
+        "handlers.HealthMetrics": {
+            "type": "object",
+            "properties": {
+                "failed_photos": {
+                    "type": "integer"
+                },
+                "pending_photos": {
+                    "type": "integer"
+                },
+                "processing_photos": {
+                    "type": "integer"
+                },
+                "stuck_photos": {
+                    "type": "integer"
+                },
+                "total_photos": {
+                    "type": "integer"
                 }
             }
         },
@@ -976,13 +1054,13 @@ const docTemplate = `{
     },
     "securityDefinitions": {
         "AdminToken": {
-            "description": "Admin token for log access",
+            "description": "Token สำหรับผู้ดูแลระบบ ใช้เข้าถึง Log และฟังก์ชันพิเศษ",
             "type": "apiKey",
             "name": "X-Admin-Token",
             "in": "header"
         },
         "BearerAuth": {
-            "description": "Type \"Bearer\" followed by a space and JWT token.",
+            "description": "ใส่ \"Bearer\" ตามด้วยช่องว่างและ JWT Token เช่น \"Bearer eyJhbGc...\"",
             "type": "apiKey",
             "name": "Authorization",
             "in": "header"
@@ -997,7 +1075,7 @@ var SwaggerInfo = &swag.Spec{
 	BasePath:         "/api/v1",
 	Schemes:          []string{},
 	Title:            "KU Directory API",
-	Description:      "API สำหรับระบบจัดการรูปภาพและโฟลเดอร์ Google Drive",
+	Description:      "ระบบจัดการรูปภาพและโฟลเดอร์ Google Drive สำหรับมหาวิทยาลัยเกษตรศาสตร์\n\n## ความสามารถหลัก\n- **การจัดการโฟลเดอร์** - เชื่อมต่อและซิงค์กับ Google Drive\n- **การค้นหาใบหน้า** - ค้นหารูปภาพจากใบหน้าด้วย AI\n- **การสร้างข่าว** - สร้างข่าวอัตโนมัติจากรูปภาพด้วย Gemini AI\n- **การจัดการผู้ใช้** - ระบบสมาชิกและสิทธิ์การเข้าถึง\n\n## การยืนยันตัวตน\nใช้ JWT Token ในการยืนยันตัวตน โดยส่ง Token ใน Header `Authorization: Bearer <token>`",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

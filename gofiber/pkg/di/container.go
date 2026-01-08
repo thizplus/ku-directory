@@ -311,6 +311,9 @@ func (c *Container) initWorkers() error {
 	// Schedule webhook renewal job (runs every 6 hours)
 	c.scheduleWebhookRenewal()
 
+	// Schedule auto reset stuck photos job (runs every 10 minutes)
+	c.scheduleAutoResetStuck()
+
 	return nil
 }
 
@@ -341,6 +344,40 @@ func (c *Container) scheduleWebhookRenewal() {
 		logger.StartupWarn("webhook_renewal_schedule_failed", "Failed to schedule webhook renewal job", map[string]interface{}{"error": err.Error()})
 	} else {
 		logger.Startup("webhook_renewal_scheduled", "Webhook renewal job scheduled (every 6 hours)", nil)
+	}
+}
+
+// scheduleAutoResetStuck sets up a scheduled job to reset photos stuck in processing
+func (c *Container) scheduleAutoResetStuck() {
+	if c.EventScheduler == nil || c.PhotoRepository == nil {
+		logger.StartupWarn("auto_reset_stuck_skip", "Scheduler or PhotoRepository not available, skipping auto reset stuck job", nil)
+		return
+	}
+
+	// Run every 10 minutes: "*/10 * * * *"
+	err := c.EventScheduler.AddJob("auto-reset-stuck", "*/10 * * * *", func() {
+		ctx := context.Background()
+
+		// Reset photos stuck in "processing" for more than 5 minutes
+		stuckThresholdMinutes := 5
+		resetCount, err := c.PhotoRepository.ResetStuckProcessingToPending(ctx, stuckThresholdMinutes)
+		if err != nil {
+			logger.SchedulerError("auto_reset_stuck_error", "Failed to reset stuck photos", err, nil)
+			return
+		}
+
+		if resetCount > 0 {
+			logger.Scheduler("auto_reset_stuck_done", "Auto reset stuck photos completed", map[string]interface{}{
+				"reset_count":      resetCount,
+				"threshold_minutes": stuckThresholdMinutes,
+			})
+		}
+	})
+
+	if err != nil {
+		logger.StartupWarn("auto_reset_stuck_schedule_failed", "Failed to schedule auto reset stuck job", map[string]interface{}{"error": err.Error()})
+	} else {
+		logger.Startup("auto_reset_stuck_scheduled", "Auto reset stuck photos job scheduled (every 10 minutes, threshold: 5 min)", nil)
 	}
 }
 
