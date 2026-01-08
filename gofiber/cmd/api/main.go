@@ -7,8 +7,8 @@ import (
 	"syscall"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/yokeTH/gofiber-scalar/scalar"
-	_ "gofiber-template/docs"
+	swagger "github.com/swaggo/fiber-swagger"
+	"gofiber-template/docs"
 	"gofiber-template/interfaces/api/handlers"
 	"gofiber-template/interfaces/api/middleware"
 	"gofiber-template/interfaces/api/routes"
@@ -105,11 +105,9 @@ func main() {
 	// Setup routes
 	routes.SetupRoutes(app, h, healthHandler, container.GetConfig())
 
-	// Setup Scalar API Documentation (modern alternative to Swagger UI)
-	app.Get("/docs/*", scalar.New(scalar.Config{
-		Title: "KU Directory API",
-		Theme: scalar.ThemeDeepSpace,
-	}))
+	// Setup Swagger UI
+	docs.SwaggerInfo.Host = ""
+	app.Get("/swagger/*", swagger.WrapHandler)
 
 	// Start server
 	port := container.GetConfig().App.Port
@@ -118,7 +116,7 @@ func main() {
 		"environment": container.GetConfig().App.Env,
 		"health":      fmt.Sprintf("http://localhost:%s/health", port),
 		"api":         fmt.Sprintf("http://localhost:%s/api/v1", port),
-		"docs":        fmt.Sprintf("http://localhost:%s/docs", port),
+		"swagger":     fmt.Sprintf("http://localhost:%s/swagger/index.html", port),
 		"websocket":   fmt.Sprintf("ws://localhost:%s/ws", port),
 		"logs_api":    fmt.Sprintf("http://localhost:%s/api/v1/admin/logs", port),
 	})
