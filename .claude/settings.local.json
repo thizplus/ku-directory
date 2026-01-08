@@ -56,7 +56,17 @@
       "Bash(ls:*)",
       "Bash(git ls-files:*)",
       "Bash(git check-ignore:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(del /f \"application\\\\serviceimpl\\\\shared_folder_service_impl.go.backup\")",
+      "Bash(git restore:*)",
+      "WebFetch(domain:ku-directory-gofiber.wti9as.easypanel.host)",
+      "Bash(go doc:*)",
+      "Bash(go install:*)",
+      "Bash(swag init:*)",
+      "Bash(go list:*)",
+      "Bash(python:*)",
+      "Bash(go vet:*)",
+      "WebFetch(domain:github.com)"
     ]
   }
 }

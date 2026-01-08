@@ -8,7 +8,7 @@ import (
 	"syscall"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/yokeTH/gofiber-scalar/scalar/v2"
+	"github.com/yokeTH/gofiber-scalar/scalar"
 	_ "gofiber-template/docs"
 	"gofiber-template/interfaces/api/handlers"
 	"gofiber-template/interfaces/api/middleware"
