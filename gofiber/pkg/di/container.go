@@ -308,7 +308,40 @@ func (c *Container) initWorkers() error {
 	)
 	logger.Startup("shared_folder_service_initialized", "SharedFolder service initialized", nil)
 
+	// Schedule webhook renewal job (runs every 6 hours)
+	c.scheduleWebhookRenewal()
+
 	return nil
+}
+
+// scheduleWebhookRenewal sets up a scheduled job to renew expiring webhooks
+func (c *Container) scheduleWebhookRenewal() {
+	if c.EventScheduler == nil || c.SharedFolderService == nil {
+		logger.StartupWarn("webhook_renewal_skip", "Scheduler or SharedFolderService not available, skipping webhook renewal job", nil)
+		return
+	}
+
+	// Run every 6 hours: "0 */6 * * *"
+	err := c.EventScheduler.AddJob("webhook-renewal", "0 */6 * * *", func() {
+		ctx := context.Background()
+		renewed, failed, err := c.SharedFolderService.RenewExpiringWebhooks(ctx)
+		if err != nil {
+			logger.SchedulerError("webhook_renewal_job_error", "Webhook renewal job failed", err, nil)
+			return
+		}
+		if renewed > 0 || failed > 0 {
+			logger.Scheduler("webhook_renewal_job_done", "Webhook renewal job completed", map[string]interface{}{
+				"renewed": renewed,
+				"failed":  failed,
+			})
+		}
+	})
+
+	if err != nil {
+		logger.StartupWarn("webhook_renewal_schedule_failed", "Failed to schedule webhook renewal job", map[string]interface{}{"error": err.Error()})
+	} else {
+		logger.Startup("webhook_renewal_scheduled", "Webhook renewal job scheduled (every 6 hours)", nil)
+	}
 }
 
 // autoSyncOnStartup creates sync jobs for all users with Drive connected

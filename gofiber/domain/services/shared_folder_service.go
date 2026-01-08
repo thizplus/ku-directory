@@ -23,4 +23,7 @@ type SharedFolderService interface {
 
 	// Register webhook for existing folder
 	RegisterWebhook(ctx context.Context, userID uuid.UUID, folderID uuid.UUID) error
+
+	// Webhook maintenance
+	RenewExpiringWebhooks(ctx context.Context) (renewed int, failed int, err error)
 }

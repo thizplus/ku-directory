@@ -166,3 +166,15 @@ func (r *SharedFolderRepositoryImpl) CountUsers(ctx context.Context, folderID uu
 		Count(&count).Error
 	return count, err
 }
+
+// GetFoldersWithExpiringWebhooks gets folders with webhooks expiring before the given threshold
+func (r *SharedFolderRepositoryImpl) GetFoldersWithExpiringWebhooks(ctx context.Context, expiryThreshold time.Time) ([]models.SharedFolder, error) {
+	var folders []models.SharedFolder
+	err := r.db.WithContext(ctx).
+		Where("webhook_expiry IS NOT NULL").
+		Where("webhook_expiry < ?", expiryThreshold).
+		Where("webhook_channel_id != ''").
+		Where("drive_refresh_token != ''"). // Must have valid tokens to renew
+		Find(&folders).Error
+	return folders, err
+}

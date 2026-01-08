@@ -31,4 +31,7 @@ type SharedFolderRepository interface {
 
 	// Count
 	CountUsers(ctx context.Context, folderID uuid.UUID) (int64, error)
+
+	// Webhook management
+	GetFoldersWithExpiringWebhooks(ctx context.Context, expiryThreshold time.Time) ([]models.SharedFolder, error)
 }

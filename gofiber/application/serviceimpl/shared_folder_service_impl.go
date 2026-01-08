@@ -753,3 +753,119 @@ func (s *SharedFolderServiceImpl) triggerSyncForFolder(ctx context.Context, fold
 	})
 	return nil
 }
+
+// RenewExpiringWebhooks renews webhooks that are about to expire
+// Returns the number of renewed and failed webhooks
+func (s *SharedFolderServiceImpl) RenewExpiringWebhooks(ctx context.Context) (renewed int, failed int, err error) {
+	// Get folders with webhooks expiring in the next 2 days
+	expiryThreshold := time.Now().Add(48 * time.Hour)
+
+	logger.Scheduler("webhook_renewal_start", "Starting webhook renewal check", map[string]interface{}{
+		"expiry_threshold": expiryThreshold.Format(time.RFC3339),
+	})
+
+	folders, err := s.sharedFolderRepo.GetFoldersWithExpiringWebhooks(ctx, expiryThreshold)
+	if err != nil {
+		logger.SchedulerError("webhook_renewal_query_failed", "Failed to query expiring webhooks", err, nil)
+		return 0, 0, fmt.Errorf("failed to query expiring webhooks: %w", err)
+	}
+
+	if len(folders) == 0 {
+		logger.Scheduler("webhook_renewal_none", "No webhooks need renewal", nil)
+		return 0, 0, nil
+	}
+
+	logger.Scheduler("webhook_renewal_found", "Found webhooks to renew", map[string]interface{}{
+		"count": len(folders),
+	})
+
+	for _, folder := range folders {
+		renewErr := s.renewWebhookForFolder(ctx, &folder)
+		if renewErr != nil {
+			failed++
+			logger.SchedulerError("webhook_renewal_failed", "Failed to renew webhook", renewErr, map[string]interface{}{
+				"folder_id":   folder.ID.String(),
+				"folder_name": folder.DriveFolderName,
+			})
+		} else {
+			renewed++
+			logger.Scheduler("webhook_renewed", "Successfully renewed webhook", map[string]interface{}{
+				"folder_id":   folder.ID.String(),
+				"folder_name": folder.DriveFolderName,
+			})
+		}
+	}
+
+	logger.Scheduler("webhook_renewal_complete", "Webhook renewal completed", map[string]interface{}{
+		"renewed": renewed,
+		"failed":  failed,
+		"total":   len(folders),
+	})
+
+	return renewed, failed, nil
+}
+
+// renewWebhookForFolder renews the webhook for a specific folder
+func (s *SharedFolderServiceImpl) renewWebhookForFolder(ctx context.Context, folder *models.SharedFolder) error {
+	// First, refresh the token if needed
+	tokenInfo, wasRefreshed, err := s.driveClient.RefreshTokenIfNeeded(ctx, folder.DriveAccessToken, folder.DriveRefreshToken, time.Time{})
+	if err != nil {
+		return fmt.Errorf("failed to refresh token: %w", err)
+	}
+
+	accessToken := tokenInfo.AccessToken
+	refreshToken := folder.DriveRefreshToken
+	if tokenInfo.RefreshToken != "" {
+		refreshToken = tokenInfo.RefreshToken
+	}
+
+	// If token was refreshed, update the folder's tokens
+	if wasRefreshed {
+		folder.DriveAccessToken = accessToken
+		folder.DriveRefreshToken = refreshToken
+		if err := s.sharedFolderRepo.UpdateTokens(ctx, folder.ID, accessToken, refreshToken, &tokenInfo.Expiry, folder.TokenOwnerID); err != nil {
+			logger.SchedulerWarn("webhook_renewal_token_save_failed", "Failed to save refreshed token", map[string]interface{}{
+				"folder_id": folder.ID.String(),
+				"error":     err.Error(),
+			})
+		}
+	}
+
+	// Get Drive service
+	srv, err := s.driveClient.GetDriveService(ctx, accessToken, refreshToken, tokenInfo.Expiry)
+	if err != nil {
+		return fmt.Errorf("failed to get drive service: %w", err)
+	}
+
+	// Stop the old webhook first (ignore errors - it might already be expired)
+	if folder.WebhookChannelID != "" && folder.WebhookResourceID != "" {
+		_ = s.driveClient.StopWatch(ctx, srv, folder.WebhookChannelID, folder.WebhookResourceID)
+	}
+
+	// Get new start page token
+	startPageToken, err := s.driveClient.GetStartPageToken(ctx, srv)
+	if err != nil {
+		return fmt.Errorf("failed to get start page token: %w", err)
+	}
+
+	// Register new webhook
+	channelID := uuid.New().String()
+	channel, err := s.driveClient.WatchChanges(ctx, srv, channelID, folder.WebhookToken, startPageToken)
+	if err != nil {
+		return fmt.Errorf("failed to register webhook: %w", err)
+	}
+
+	// Update folder with new webhook info
+	expiry := time.UnixMilli(channel.Expiration)
+	folder.WebhookChannelID = channel.Id
+	folder.WebhookResourceID = channel.ResourceId
+	folder.WebhookExpiry = &expiry
+	folder.PageToken = startPageToken
+	folder.UpdatedAt = time.Now()
+
+	if err := s.sharedFolderRepo.Update(ctx, folder.ID, folder); err != nil {
+		return fmt.Errorf("failed to update folder: %w", err)
+	}
+
+	return nil
+}
