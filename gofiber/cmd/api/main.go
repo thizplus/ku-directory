@@ -8,13 +8,12 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	swagger "github.com/swaggo/fiber-swagger"
+	"gofiber-template/docs"
 	"gofiber-template/interfaces/api/handlers"
 	"gofiber-template/interfaces/api/middleware"
 	"gofiber-template/interfaces/api/routes"
 	"gofiber-template/pkg/di"
 	"gofiber-template/pkg/logger"
-
-	_ "gofiber-template/docs" // Swagger docs
 )
 
 // @title KU Directory API
@@ -28,7 +27,6 @@ import (
 // @license.name MIT
 // @license.url https://opensource.org/licenses/MIT
 
-// @host localhost:8080
 // @BasePath /api/v1
 
 // @securityDefinitions.apikey BearerAuth
@@ -78,7 +76,8 @@ func main() {
 	// Setup routes
 	routes.SetupRoutes(app, h)
 
-	// Setup Swagger
+	// Setup Swagger - use empty host so it works on any domain
+	docs.SwaggerInfo.Host = ""
 	app.Get("/swagger/*", swagger.WrapHandler)
 
 	// Start server
