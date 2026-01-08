@@ -2,7 +2,6 @@ package di
 
 import (
 	"context"
-	"log"
 
 	"gorm.io/gorm"
 
@@ -19,6 +18,7 @@ import (
 	"gofiber-template/infrastructure/worker"
 	"gofiber-template/interfaces/api/handlers"
 	"gofiber-template/pkg/config"
+	"gofiber-template/pkg/logger"
 	"gofiber-template/pkg/scheduler"
 )
 
@@ -103,7 +103,7 @@ func (c *Container) initConfig() error {
 		return err
 	}
 	c.Config = cfg
-	log.Println("✓ Configuration loaded")
+	logger.Startup("config_loaded", "Configuration loaded", nil)
 	return nil
 }
 
@@ -123,13 +123,13 @@ func (c *Container) initInfrastructure() error {
 		return err
 	}
 	c.DB = db
-	log.Println("✓ Database connected")
+	logger.Startup("db_connected", "Database connected", nil)
 
 	// Run migrations
 	if err := postgres.Migrate(db); err != nil {
 		return err
 	}
-	log.Println("✓ Database migrated")
+	logger.Startup("db_migrated", "Database migrated", nil)
 
 	// Initialize Redis
 	redisConfig := redis.RedisConfig{
@@ -142,9 +142,9 @@ func (c *Container) initInfrastructure() error {
 
 	// Test Redis connection
 	if err := c.RedisClient.Ping(context.Background()); err != nil {
-		log.Printf("Warning: Redis connection failed: %v", err)
+		logger.StartupWarn("redis_connection_failed", "Redis connection failed", map[string]interface{}{"error": err.Error()})
 	} else {
-		log.Println("✓ Redis connected")
+		logger.Startup("redis_connected", "Redis connected", nil)
 	}
 
 	// Initialize Bunny Storage
@@ -155,35 +155,35 @@ func (c *Container) initInfrastructure() error {
 		CDNUrl:      c.Config.Bunny.CDNUrl,
 	}
 	c.BunnyStorage = storage.NewBunnyStorage(bunnyConfig)
-	log.Println("✓ Bunny Storage initialized")
+	logger.Startup("bunny_storage_initialized", "Bunny Storage initialized", nil)
 
 	// Initialize Google OAuth
 	c.GoogleOAuth = oauth.NewGoogleOAuth(c.Config.Google)
 	if err := c.GoogleOAuth.ValidateConfig(); err != nil {
-		log.Printf("Warning: Google OAuth not configured: %v", err)
+		logger.StartupWarn("google_oauth_not_configured", "Google OAuth not configured", map[string]interface{}{"error": err.Error()})
 	} else {
-		log.Println("✓ Google OAuth initialized")
+		logger.Startup("google_oauth_initialized", "Google OAuth initialized", nil)
 	}
 
 	// Initialize Google Drive Client
 	c.GoogleDrive = googledrive.NewDriveClient(c.Config.GoogleDrive)
 	if err := c.GoogleDrive.ValidateConfig(); err != nil {
-		log.Printf("Warning: Google Drive not configured: %v", err)
+		logger.StartupWarn("google_drive_not_configured", "Google Drive not configured", map[string]interface{}{"error": err.Error()})
 	} else {
-		log.Println("✓ Google Drive client initialized")
+		logger.Startup("google_drive_initialized", "Google Drive client initialized", nil)
 	}
 
 	// Initialize Gemini Client
 	if c.Config.Gemini.APIKey != "" {
 		geminiClient, err := gemini.NewGeminiClient(c.Config.Gemini.APIKey, c.Config.Gemini.Model)
 		if err != nil {
-			log.Printf("Warning: Failed to initialize Gemini client: %v", err)
+			logger.StartupWarn("gemini_init_failed", "Failed to initialize Gemini client", map[string]interface{}{"error": err.Error()})
 		} else {
 			c.GeminiClient = geminiClient
-			log.Println("✓ Gemini client initialized")
+			logger.Startup("gemini_initialized", "Gemini client initialized", nil)
 		}
 	} else {
-		log.Println("Warning: Gemini API key not configured")
+		logger.StartupWarn("gemini_not_configured", "Gemini API key not configured", nil)
 	}
 
 	return nil
@@ -199,7 +199,7 @@ func (c *Container) initRepositories() error {
 	c.FaceRepository = postgres.NewFaceRepository(c.DB)
 	c.PersonRepository = postgres.NewPersonRepository(c.DB)
 	c.SharedFolderRepository = postgres.NewSharedFolderRepository(c.DB)
-	log.Println("✓ Repositories initialized")
+	logger.Startup("repositories_initialized", "Repositories initialized", nil)
 	return nil
 }
 
@@ -219,12 +219,12 @@ func (c *Container) initServices() error {
 	// Initialize News Service (requires Google Drive - Gemini credentials are per-user)
 	if c.GoogleDrive != nil {
 		c.NewsService = serviceimpl.NewNewsServiceWithDrive(c.GoogleDrive, c.PhotoRepository, c.UserRepository, c.SharedFolderRepository)
-		log.Println("✓ News service initialized")
+		logger.Startup("news_service_initialized", "News service initialized", nil)
 	}
 
 	// SharedFolderService will be initialized after workers (needs SyncWorker)
 
-	log.Println("✓ Services initialized")
+	logger.Startup("services_initialized", "Services initialized", nil)
 	return nil
 }
 
@@ -234,13 +234,13 @@ func (c *Container) initScheduler() error {
 
 	// Start the scheduler
 	c.EventScheduler.Start()
-	log.Println("✓ Event scheduler started")
+	logger.Startup("scheduler_started", "Event scheduler started", nil)
 
 	// Load and schedule existing active jobs
 	ctx := context.Background()
 	jobs, _, err := c.JobService.ListJobs(ctx, 0, 1000)
 	if err != nil {
-		log.Printf("Warning: Failed to load existing jobs: %v", err)
+		logger.StartupWarn("jobs_load_failed", "Failed to load existing jobs", map[string]interface{}{"error": err.Error()})
 		return nil
 	}
 
@@ -251,7 +251,7 @@ func (c *Container) initScheduler() error {
 				c.JobService.ExecuteJob(ctx, job)
 			})
 			if err != nil {
-				log.Printf("Warning: Failed to schedule job %s: %v", job.Name, err)
+				logger.StartupWarn("job_schedule_failed", "Failed to schedule job", map[string]interface{}{"job_name": job.Name, "error": err.Error()})
 			} else {
 				activeJobCount++
 			}
@@ -259,7 +259,7 @@ func (c *Container) initScheduler() error {
 	}
 
 	if activeJobCount > 0 {
-		log.Printf("✓ Scheduled %d active jobs", activeJobCount)
+		logger.Startup("jobs_scheduled", "Scheduled active jobs", map[string]interface{}{"count": activeJobCount})
 	}
 
 	return nil
@@ -294,7 +294,7 @@ func (c *Container) initWorkers() error {
 		// Start the face worker
 		c.FaceWorker.Start()
 	} else if !c.Config.FaceAPI.Enabled {
-		log.Println("Face API is disabled, skipping face worker initialization")
+		logger.Startup("face_api_disabled", "Face API is disabled, skipping face worker initialization", nil)
 	}
 
 	// Initialize SharedFolderService (needs SyncWorker, SyncJobRepository, and PhotoRepository)
@@ -305,7 +305,7 @@ func (c *Container) initWorkers() error {
 		c.GoogleDrive,
 		c.SyncWorker,
 	)
-	log.Println("✓ SharedFolder service initialized")
+	logger.Startup("shared_folder_service_initialized", "SharedFolder service initialized", nil)
 
 	return nil
 }
@@ -317,7 +317,7 @@ func (c *Container) autoSyncOnStartup() {
 	// Get all users
 	users, err := c.UserRepository.List(ctx, 0, 1000)
 	if err != nil {
-		log.Printf("Warning: Failed to list users for auto sync: %v", err)
+		logger.StartupWarn("auto_sync_list_users_failed", "Failed to list users for auto sync", map[string]interface{}{"error": err.Error()})
 		return
 	}
 
@@ -334,21 +334,21 @@ func (c *Container) autoSyncOnStartup() {
 			// Create new sync job
 			job, err := c.DriveService.StartSync(ctx, user.ID)
 			if err != nil {
-				log.Printf("Warning: Failed to create auto sync job for user %s: %v", user.ID, err)
+				logger.StartupWarn("auto_sync_job_failed", "Failed to create auto sync job for user", map[string]interface{}{"user_id": user.ID.String(), "error": err.Error()})
 				continue
 			}
 			syncCount++
-			log.Printf("Auto sync job created for user %s (job: %s)", user.ID, job.ID)
+			logger.Startup("auto_sync_job_created", "Auto sync job created", map[string]interface{}{"user_id": user.ID.String(), "job_id": job.ID.String()})
 		}
 	}
 
 	if syncCount > 0 {
-		log.Printf("✓ Created %d auto sync jobs on startup", syncCount)
+		logger.Startup("auto_sync_jobs_created", "Created auto sync jobs on startup", map[string]interface{}{"count": syncCount})
 	}
 }
 
 func (c *Container) Cleanup() error {
-	log.Println("Starting cleanup...")
+	logger.Startup("cleanup_started", "Starting cleanup...", nil)
 
 	// Stop face worker
 	if c.FaceWorker != nil {
@@ -368,18 +368,18 @@ func (c *Container) Cleanup() error {
 	if c.EventScheduler != nil {
 		if c.EventScheduler.IsRunning() {
 			c.EventScheduler.Stop()
-			log.Println("✓ Event scheduler stopped")
+			logger.Startup("scheduler_stopped", "Event scheduler stopped", nil)
 		} else {
-			log.Println("✓ Event scheduler was already stopped")
+			logger.Startup("scheduler_already_stopped", "Event scheduler was already stopped", nil)
 		}
 	}
 
 	// Close Redis connection
 	if c.RedisClient != nil {
 		if err := c.RedisClient.Close(); err != nil {
-			log.Printf("Warning: Failed to close Redis connection: %v", err)
+			logger.StartupWarn("redis_close_failed", "Failed to close Redis connection", map[string]interface{}{"error": err.Error()})
 		} else {
-			log.Println("✓ Redis connection closed")
+			logger.Startup("redis_closed", "Redis connection closed", nil)
 		}
 	}
 
@@ -388,14 +388,14 @@ func (c *Container) Cleanup() error {
 		sqlDB, err := c.DB.DB()
 		if err == nil {
 			if err := sqlDB.Close(); err != nil {
-				log.Printf("Warning: Failed to close database connection: %v", err)
+				logger.StartupWarn("db_close_failed", "Failed to close database connection", map[string]interface{}{"error": err.Error()})
 			} else {
-				log.Println("✓ Database connection closed")
+				logger.Startup("db_closed", "Database connection closed", nil)
 			}
 		}
 	}
 
-	log.Println("✓ Cleanup completed")
+	logger.Startup("cleanup_completed", "Cleanup completed", nil)
 	return nil
 }
 

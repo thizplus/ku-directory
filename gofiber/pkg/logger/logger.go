@@ -22,6 +22,7 @@ const (
 	CategoryDB        Category = "db"
 	CategoryDrive     Category = "drive"
 	CategoryFace      Category = "face"
+	CategoryStartup   Category = "startup"
 )
 
 // Level represents log level
@@ -373,6 +374,44 @@ func FaceError(action, message string, err error, data map[string]interface{}) {
 	})
 }
 
+// Startup logs startup/initialization events
+func Startup(action, message string, data map[string]interface{}) {
+	Default().Log(LogEntry{
+		Level:    LevelInfo,
+		Category: CategoryStartup,
+		Action:   action,
+		Message:  message,
+		Data:     data,
+	})
+}
+
+// StartupError logs startup errors
+func StartupError(action, message string, err error, data map[string]interface{}) {
+	errStr := ""
+	if err != nil {
+		errStr = err.Error()
+	}
+	Default().Log(LogEntry{
+		Level:    LevelError,
+		Category: CategoryStartup,
+		Action:   action,
+		Message:  message,
+		Error:    errStr,
+		Data:     data,
+	})
+}
+
+// StartupWarn logs startup warnings
+func StartupWarn(action, message string, data map[string]interface{}) {
+	Default().Log(LogEntry{
+		Level:    LevelWarn,
+		Category: CategoryStartup,
+		Action:   action,
+		Message:  message,
+		Data:     data,
+	})
+}
+
 // Info logs info level message
 func Info(category Category, action, message string, data map[string]interface{}) {
 	Default().Log(LogEntry{
@@ -450,7 +489,7 @@ func (l *Logger) ReadLogs(opts ReadLogsOptions) ([]LogEntry, error) {
 	today := time.Now().Format("2006-01-02")
 
 	// Determine which categories to read
-	categories := []Category{CategoryAuth, CategoryWebhook, CategoryWebSocket, CategorySync, CategoryAPI, CategoryDB, CategoryDrive, CategoryFace}
+	categories := []Category{CategoryAuth, CategoryWebhook, CategoryWebSocket, CategorySync, CategoryAPI, CategoryDB, CategoryDrive, CategoryFace, CategoryStartup}
 	if opts.Category != "" {
 		categories = []Category{opts.Category}
 	}

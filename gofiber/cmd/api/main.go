@@ -1,7 +1,7 @@
 package main
 
 import (
-	"log"
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -17,16 +17,17 @@ import (
 func main() {
 	// Initialize logger
 	if err := logger.Init("logs", true); err != nil {
-		log.Printf("Warning: Failed to initialize logger: %v", err)
+		fmt.Printf("Warning: Failed to initialize logger: %v\n", err)
 	}
-	log.Println("📝 Logger initialized - logs will be written to ./logs/")
+	logger.Startup("logger_init", "Logger initialized - logs will be written to ./logs/", nil)
 
 	// Initialize DI container
 	container := di.NewContainer()
 
 	// Initialize all dependencies
 	if err := container.Initialize(); err != nil {
-		log.Fatal("Failed to initialize container:", err)
+		logger.StartupError("container_init_failed", "Failed to initialize container", err, nil)
+		os.Exit(1)
 	}
 
 	// Setup graceful shutdown
@@ -52,14 +53,19 @@ func main() {
 
 	// Start server
 	port := container.GetConfig().App.Port
-	log.Printf("🚀 Server starting on port %s", port)
-	log.Printf("🌍 Environment: %s", container.GetConfig().App.Env)
-	log.Printf("📚 Health check: http://localhost:%s/health", port)
-	log.Printf("📖 API docs: http://localhost:%s/api/v1", port)
-	log.Printf("🔌 WebSocket: ws://localhost:%s/ws", port)
-	log.Printf("📋 Logs API: http://localhost:%s/api/v1/admin/logs", port)
+	logger.Startup("server_starting", "Server starting", map[string]interface{}{
+		"port":        port,
+		"environment": container.GetConfig().App.Env,
+		"health":      fmt.Sprintf("http://localhost:%s/health", port),
+		"api":         fmt.Sprintf("http://localhost:%s/api/v1", port),
+		"websocket":   fmt.Sprintf("ws://localhost:%s/ws", port),
+		"logs_api":    fmt.Sprintf("http://localhost:%s/api/v1/admin/logs", port),
+	})
 
-	log.Fatal(app.Listen(":" + port))
+	if err := app.Listen(":" + port); err != nil {
+		logger.StartupError("server_failed", "Server failed to start", err, nil)
+		os.Exit(1)
+	}
 }
 
 func setupGracefulShutdown(container *di.Container) {
@@ -68,13 +74,13 @@ func setupGracefulShutdown(container *di.Container) {
 
 	go func() {
 		<-c
-		log.Println("\n🛑 Gracefully shutting down...")
+		logger.Startup("shutdown_started", "Gracefully shutting down", nil)
 
 		if err := container.Cleanup(); err != nil {
-			log.Printf("❌ Error during cleanup: %v", err)
+			logger.StartupError("cleanup_failed", "Error during cleanup", err, nil)
 		}
 
-		log.Println("👋 Shutdown complete")
+		logger.Startup("shutdown_complete", "Shutdown complete", nil)
 		os.Exit(0)
 	}()
 }
