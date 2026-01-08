@@ -244,7 +244,7 @@ function PhotoCardList({
   )
 }
 
-// Folder card component - Grid view
+// Folder card component - Grid view (Google Drive style)
 function FolderCardGrid({
   name,
   photoCount,
@@ -256,16 +256,18 @@ function FolderCardGrid({
 }) {
   return (
     <button
-      className="group text-left"
+      className="group text-left w-full"
       onClick={onClick}
     >
-      <div className="aspect-square bg-muted/50 rounded-lg flex items-center justify-center transition-colors group-hover:bg-muted">
-        <Folder className="h-16 w-16 text-yellow-500 group-hover:scale-105 transition-transform" />
+      <div className="aspect-[4/3] bg-gradient-to-br from-muted/80 to-muted rounded-xl border border-border/50 flex flex-col items-center justify-center gap-2 transition-all group-hover:border-primary/30 group-hover:shadow-md group-hover:scale-[1.02]">
+        <Folder className="h-12 w-12 md:h-16 md:w-16 text-yellow-500 drop-shadow-sm" />
+        <div className="text-center px-2">
+          <p className="text-sm font-medium truncate max-w-full" title={name}>
+            {name}
+          </p>
+          <p className="text-xs text-muted-foreground">{photoCount} รูป</p>
+        </div>
       </div>
-      <p className="mt-1.5 text-sm truncate font-medium" title={name}>
-        {name}
-      </p>
-      <p className="text-xs text-muted-foreground">{photoCount} รูป</p>
     </button>
   )
 }
@@ -350,12 +352,7 @@ export default function GalleryPage() {
     }
   }, [])
 
-  // Auto-select first folder
-  useEffect(() => {
-    if (!selectedFolderId && sharedFolders.length > 0 && !searchParams.get("folder")) {
-      setSelectedFolderId(sharedFolders[0].id)
-    }
-  }, [sharedFolders, selectedFolderId, searchParams])
+  // Don't auto-select - let user navigate like Google Drive
 
   // Build breadcrumbs
   useEffect(() => {
@@ -522,72 +519,76 @@ export default function GalleryPage() {
     )
   }
 
-  // Home view - show all shared folders
+  // Home view - show all shared folders (Google Drive style)
   if (!selectedFolderId) {
     return (
       <div className="space-y-6">
-        {/* Header */}
+        {/* Header - Google Drive style */}
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold">คลังรูปภาพ</h1>
-            <p className="text-sm text-muted-foreground">
-              {sharedFolders.length} โฟลเดอร์ | {stats?.total_photos || 0} รูปภาพ
-            </p>
+          <div className="flex items-center gap-3">
+            <Home className="h-6 w-6 text-muted-foreground" />
+            <div>
+              <h1 className="text-xl font-semibold">โฟลเดอร์ทั้งหมด</h1>
+              <p className="text-xs text-muted-foreground">
+                {sharedFolders.length} โฟลเดอร์ • {stats?.total_photos || 0} รูปภาพ • {stats?.total_faces || 0} ใบหน้า
+              </p>
+            </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setViewMode(viewMode === "grid" ? "list" : "grid")}
-            >
-              {viewMode === "grid" ? <List className="h-4 w-4" /> : <LayoutGrid className="h-4 w-4" />}
-            </Button>
+            {/* View toggle */}
+            <div className="flex items-center border rounded-lg overflow-hidden">
+              <button
+                onClick={() => setViewMode("grid")}
+                className={cn(
+                  "p-2 transition-colors",
+                  viewMode === "grid" ? "bg-primary text-primary-foreground" : "hover:bg-muted"
+                )}
+              >
+                <LayoutGrid className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => setViewMode("list")}
+                className={cn(
+                  "p-2 transition-colors",
+                  viewMode === "list" ? "bg-primary text-primary-foreground" : "hover:bg-muted"
+                )}
+              >
+                <List className="h-4 w-4" />
+              </button>
+            </div>
             <Button variant="outline" size="sm" onClick={() => navigate("/settings")}>
-              <Settings className="h-4 w-4 mr-2" />
-              จัดการโฟลเดอร์
+              <Settings className="h-4 w-4" />
             </Button>
-          </div>
-        </div>
-
-        {/* Quick Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="p-4 rounded-lg border bg-card">
-            <p className="text-xs text-muted-foreground">รูปภาพทั้งหมด</p>
-            <p className="text-2xl font-semibold">{stats?.total_photos || 0}</p>
-          </div>
-          <div className="p-4 rounded-lg border bg-card">
-            <p className="text-xs text-muted-foreground">ประมวลผลแล้ว</p>
-            <p className="text-2xl font-semibold text-green-600">{stats?.processed_photos || 0}</p>
-          </div>
-          <div className="p-4 rounded-lg border bg-card">
-            <p className="text-xs text-muted-foreground">รอประมวลผล</p>
-            <p className="text-2xl font-semibold text-yellow-600">{stats?.pending_photos || 0}</p>
-          </div>
-          <div className="p-4 rounded-lg border bg-card">
-            <p className="text-xs text-muted-foreground">ใบหน้าที่พบ</p>
-            <p className="text-2xl font-semibold text-primary">{stats?.total_faces || 0}</p>
           </div>
         </div>
 
         <Separator />
 
-        {/* Folders */}
+        {/* Folders - Google Drive style grid */}
         {foldersLoading ? (
           <div className={cn(
             "gap-4",
             viewMode === "grid"
-              ? "grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6"
+              ? "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
               : "space-y-2"
           )}>
             {Array.from({ length: 6 }).map((_, i) => (
               <div key={i} className={cn(
-                "bg-muted rounded-lg animate-pulse",
-                viewMode === "grid" ? "aspect-square" : "h-16"
+                "bg-muted rounded-xl animate-pulse",
+                viewMode === "grid" ? "aspect-[4/3]" : "h-14"
               )} />
             ))}
           </div>
+        ) : sharedFolders.length === 0 ? (
+          <div className="py-16 text-center">
+            <Folder className="mx-auto h-16 w-16 text-muted-foreground/30" />
+            <p className="mt-4 text-muted-foreground">ยังไม่มีโฟลเดอร์</p>
+            <Button className="mt-4" onClick={() => navigate("/settings")}>
+              เพิ่มโฟลเดอร์
+            </Button>
+          </div>
         ) : viewMode === "grid" ? (
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
             {sharedFolders.map(folder => (
               <FolderCardGrid
                 key={folder.id}
@@ -609,6 +610,27 @@ export default function GalleryPage() {
             ))}
           </div>
         )}
+
+        {/* Quick Stats - moved to bottom */}
+        <Separator />
+        <div className="flex items-center justify-center gap-8 text-sm text-muted-foreground py-2">
+          <span className="flex items-center gap-1.5">
+            <Images className="h-4 w-4" />
+            {stats?.total_photos || 0} รูป
+          </span>
+          <span className="flex items-center gap-1.5">
+            <CheckCircle2 className="h-4 w-4 text-green-500" />
+            {stats?.processed_photos || 0} ประมวลผลแล้ว
+          </span>
+          <span className="flex items-center gap-1.5">
+            <Clock className="h-4 w-4 text-yellow-500" />
+            {stats?.pending_photos || 0} รอดำเนินการ
+          </span>
+          <span className="flex items-center gap-1.5">
+            <Users className="h-4 w-4 text-primary" />
+            {stats?.total_faces || 0} ใบหน้า
+          </span>
+        </div>
       </div>
     )
   }
