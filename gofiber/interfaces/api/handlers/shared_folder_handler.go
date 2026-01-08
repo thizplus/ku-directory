@@ -11,6 +11,7 @@ import (
 	"gofiber-template/domain/models"
 	"gofiber-template/domain/repositories"
 	"gofiber-template/domain/services"
+	"gofiber-template/pkg/logger"
 	"gofiber-template/pkg/utils"
 )
 
@@ -150,56 +151,117 @@ func (h *SharedFolderHandler) GetFolder(c *fiber.Ctx) error {
 // @Success 200 {object} dto.SharedFolderResponse
 // @Router /folders [post]
 func (h *SharedFolderHandler) AddFolder(c *fiber.Ctx) error {
+	// Step 1: Get user from JWT context
 	userCtx, err := utils.GetUserFromContext(c)
 	if err != nil {
+		logger.DriveError("add_folder_unauthorized", "Failed to get user from context", err, nil)
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"success": false,
 			"error":   "Unauthorized",
 		})
 	}
 
+	logger.Drive("add_folder_request", "Add folder request received", map[string]interface{}{
+		"user_id":    userCtx.ID.String(),
+		"user_email": userCtx.Email,
+		"ip_address": c.IP(),
+	})
+
+	// Step 2: Parse request body
 	var req dto.AddFolderRequest
 	if err := c.BodyParser(&req); err != nil {
+		logger.DriveError("add_folder_parse_failed", "Failed to parse request body", err, map[string]interface{}{
+			"user_id":    userCtx.ID.String(),
+			"user_email": userCtx.Email,
+			"raw_body":   string(c.Body()),
+		})
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"success": false,
 			"error":   "Invalid request body",
 		})
 	}
 
+	logger.Drive("add_folder_parsed", "Request body parsed", map[string]interface{}{
+		"user_id":          userCtx.ID.String(),
+		"user_email":       userCtx.Email,
+		"drive_folder_id":  req.DriveFolderID,
+		"has_resource_key": req.DriveResourceKey != "",
+	})
+
 	if req.DriveFolderID == "" {
+		logger.DriveError("add_folder_missing_id", "drive_folder_id is empty", nil, map[string]interface{}{
+			"user_id":    userCtx.ID.String(),
+			"user_email": userCtx.Email,
+		})
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"success": false,
 			"error":   "drive_folder_id is required",
 		})
 	}
 
-	// Get user's OAuth tokens from database
+	// Step 3: Get user's OAuth tokens from database
 	user, err := h.userRepo.GetByID(c.Context(), userCtx.ID)
 	if err != nil {
+		logger.DriveError("add_folder_user_not_found", "Failed to get user from database", err, map[string]interface{}{
+			"user_id":    userCtx.ID.String(),
+			"user_email": userCtx.Email,
+		})
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"success": false,
 			"error":   "Failed to get user",
 		})
 	}
 
+	logger.Drive("add_folder_user_loaded", "User loaded from database", map[string]interface{}{
+		"user_id":           userCtx.ID.String(),
+		"user_email":        userCtx.Email,
+		"has_access_token":  user.DriveAccessToken != "",
+		"has_refresh_token": user.DriveRefreshToken != "",
+		"provider":          user.Provider,
+	})
+
 	if user.DriveAccessToken == "" {
+		logger.DriveError("add_folder_no_token", "User has no Google Drive access token", nil, map[string]interface{}{
+			"user_id":    userCtx.ID.String(),
+			"user_email": userCtx.Email,
+			"provider":   user.Provider,
+		})
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"success": false,
 			"error":   "Google Drive not connected. Please reconnect your Google account.",
 		})
 	}
 
+	// Step 4: Call service to add folder
+	logger.Drive("add_folder_calling_service", "Calling AddFolder service", map[string]interface{}{
+		"user_id":         userCtx.ID.String(),
+		"user_email":      userCtx.Email,
+		"drive_folder_id": req.DriveFolderID,
+	})
+
 	folder, err := h.sharedFolderService.AddFolder(c.Context(), userCtx.ID, req.DriveFolderID, req.DriveResourceKey, user.DriveAccessToken, user.DriveRefreshToken)
 	if err != nil {
 		// Check if it's a Google token error
 		var tokenErr *serviceimpl.GoogleTokenError
 		if errors.As(err, &tokenErr) {
+			logger.DriveError("add_folder_token_error", "Google token error", err, map[string]interface{}{
+				"user_id":    userCtx.ID.String(),
+				"user_email": userCtx.Email,
+				"error_code": tokenErr.Code,
+			})
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 				"success":    false,
 				"error":      tokenErr.Message,
 				"error_code": tokenErr.Code,
 			})
 		}
+
+		logger.DriveError("add_folder_service_failed", "AddFolder service failed", err, map[string]interface{}{
+			"user_id":         userCtx.ID.String(),
+			"user_email":      userCtx.Email,
+			"drive_folder_id": req.DriveFolderID,
+			"error_message":   err.Error(),
+		})
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"success": false,
 			"error":   err.Error(),
@@ -208,6 +270,16 @@ func (h *SharedFolderHandler) AddFolder(c *fiber.Ctx) error {
 
 	photoCount, _ := h.photoRepo.CountBySharedFolder(c.Context(), folder.ID)
 	userCount, _ := h.sharedFolderRepo.CountUsers(c.Context(), folder.ID)
+
+	logger.Drive("add_folder_success", "Folder added successfully", map[string]interface{}{
+		"user_id":         userCtx.ID.String(),
+		"user_email":      userCtx.Email,
+		"folder_id":       folder.ID.String(),
+		"folder_name":     folder.DriveFolderName,
+		"drive_folder_id": folder.DriveFolderID,
+		"photo_count":     photoCount,
+		"user_count":      userCount,
+	})
 
 	return c.JSON(fiber.Map{
 		"success": true,
