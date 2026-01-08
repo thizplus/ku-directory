@@ -48,6 +48,8 @@ Desktop.ini
 # ----- Logs -----
 *.log
 logs/
+!logs/.gitkeep
+!gofiber/logs/.gitkeep
 
 # ----- Docker -----
 docker-compose.override.yml

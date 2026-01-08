@@ -14,6 +14,7 @@ import (
 	"gofiber-template/domain/services"
 	"gofiber-template/infrastructure/googledrive"
 	"gofiber-template/infrastructure/worker"
+	"gofiber-template/pkg/logger"
 )
 
 // Error codes for frontend handling
@@ -81,16 +82,35 @@ func NewSharedFolderService(
 // AddFolder adds a new shared folder or joins an existing one
 // Returns immediately after creating sync job - photos sync in background via WebSocket updates
 func (s *SharedFolderServiceImpl) AddFolder(ctx context.Context, userID uuid.UUID, driveFolderID string, accessToken, refreshToken string) (*models.SharedFolder, error) {
+	logger.Drive("add_folder_start", "Starting add folder process", map[string]interface{}{
+		"user_id":         userID.String(),
+		"drive_folder_id": driveFolderID,
+		"has_token":       accessToken != "",
+	})
+
 	// Check if folder already exists
 	existingFolder, _ := s.sharedFolderRepo.GetByDriveFolderID(ctx, driveFolderID)
 
 	if existingFolder != nil {
+		logger.Drive("folder_exists", "Folder already exists in database", map[string]interface{}{
+			"folder_id":   existingFolder.ID.String(),
+			"folder_name": existingFolder.DriveFolderName,
+		})
+
 		// Folder exists - check if user already has access
 		hasAccess, err := s.sharedFolderRepo.HasUserAccess(ctx, userID, existingFolder.ID)
 		if err != nil {
+			logger.DriveError("check_access_failed", "Failed to check user access", err, map[string]interface{}{
+				"user_id":   userID.String(),
+				"folder_id": existingFolder.ID.String(),
+			})
 			return nil, fmt.Errorf("failed to check user access: %w", err)
 		}
 		if hasAccess {
+			logger.Drive("user_already_has_access", "User already has access to folder", map[string]interface{}{
+				"user_id":   userID.String(),
+				"folder_id": existingFolder.ID.String(),
+			})
 			return existingFolder, nil // Already has access
 		}
 
@@ -102,24 +122,57 @@ func (s *SharedFolderServiceImpl) AddFolder(ctx context.Context, userID uuid.UUI
 			CreatedAt:      time.Now(),
 		}
 		if err := s.sharedFolderRepo.AddUserAccess(ctx, access); err != nil {
+			logger.DriveError("add_access_failed", "Failed to add user access", err, map[string]interface{}{
+				"user_id":   userID.String(),
+				"folder_id": existingFolder.ID.String(),
+			})
 			return nil, fmt.Errorf("failed to add user access: %w", err)
 		}
 
-		// For existing folder, photos already exist - no need to sync
-		fmt.Printf("✅ User %s joined existing folder %s\n", userID, existingFolder.ID)
+		logger.Drive("user_joined_folder", "User joined existing folder", map[string]interface{}{
+			"user_id":     userID.String(),
+			"folder_id":   existingFolder.ID.String(),
+			"folder_name": existingFolder.DriveFolderName,
+		})
 		return existingFolder, nil
 	}
 
 	// Folder doesn't exist - create new one
+	logger.Drive("creating_new_folder", "Folder not found, creating new one", map[string]interface{}{
+		"drive_folder_id": driveFolderID,
+	})
+
+	logger.Drive("get_drive_service", "Getting Google Drive service", map[string]interface{}{
+		"has_access_token":  accessToken != "",
+		"has_refresh_token": refreshToken != "",
+	})
+
 	srv, err := s.driveClient.GetDriveService(ctx, accessToken, refreshToken, time.Time{})
 	if err != nil {
+		logger.DriveError("get_drive_service_failed", "Failed to get drive service", err, map[string]interface{}{
+			"user_id":         userID.String(),
+			"drive_folder_id": driveFolderID,
+		})
 		return nil, wrapGoogleAuthError(fmt.Errorf("failed to get drive service: %w", err))
 	}
 
+	logger.Drive("fetching_folder_metadata", "Fetching folder metadata from Google Drive", map[string]interface{}{
+		"drive_folder_id": driveFolderID,
+	})
+
 	folderMeta, err := srv.Files.Get(driveFolderID).Fields("id, name").Do()
 	if err != nil {
+		logger.DriveError("get_metadata_failed", "Failed to get folder metadata from Google Drive", err, map[string]interface{}{
+			"user_id":         userID.String(),
+			"drive_folder_id": driveFolderID,
+		})
 		return nil, wrapGoogleAuthError(fmt.Errorf("failed to get folder metadata: %w", err))
 	}
+
+	logger.Drive("folder_metadata_received", "Got folder metadata from Google Drive", map[string]interface{}{
+		"drive_folder_id":   folderMeta.Id,
+		"drive_folder_name": folderMeta.Name,
+	})
 
 	// Generate webhook token
 	webhookToken := uuid.New().String()
@@ -141,10 +194,19 @@ func (s *SharedFolderServiceImpl) AddFolder(ctx context.Context, userID uuid.UUI
 	}
 
 	if err := s.sharedFolderRepo.Create(ctx, folder); err != nil {
+		logger.DriveError("create_folder_failed", "Failed to create folder in database", err, map[string]interface{}{
+			"folder_id":   folder.ID.String(),
+			"folder_name": folder.DriveFolderName,
+		})
 		return nil, fmt.Errorf("failed to create shared folder: %w", err)
 	}
 
-	fmt.Printf("📁 Created folder %s (%s)\n", folder.DriveFolderName, folder.ID)
+	logger.Drive("folder_created", "Folder created in database", map[string]interface{}{
+		"folder_id":       folder.ID.String(),
+		"folder_name":     folder.DriveFolderName,
+		"drive_folder_id": folder.DriveFolderID,
+		"sync_status":     string(folder.SyncStatus),
+	})
 
 	// Add user access
 	access := &models.UserFolderAccess{
@@ -154,30 +216,62 @@ func (s *SharedFolderServiceImpl) AddFolder(ctx context.Context, userID uuid.UUI
 		CreatedAt:      time.Now(),
 	}
 	if err := s.sharedFolderRepo.AddUserAccess(ctx, access); err != nil {
+		logger.DriveError("add_owner_access_failed", "Failed to add owner access", err, map[string]interface{}{
+			"user_id":   userID.String(),
+			"folder_id": folder.ID.String(),
+		})
 		return nil, fmt.Errorf("failed to add user access: %w", err)
 	}
 
+	logger.Drive("owner_access_added", "Owner access added to folder", map[string]interface{}{
+		"user_id":   userID.String(),
+		"folder_id": folder.ID.String(),
+	})
+
 	// Create sync job for background processing
 	if err := s.createSyncJob(ctx, userID, folder.ID); err != nil {
-		fmt.Printf("⚠️ Warning: Failed to create sync job: %v\n", err)
+		logger.DriveError("create_sync_job_failed", "Failed to create sync job", err, map[string]interface{}{
+			"user_id":   userID.String(),
+			"folder_id": folder.ID.String(),
+		})
 		// Don't fail - folder is created, user can manually trigger sync later
 	} else {
-		fmt.Printf("🔄 Sync job created for folder %s - photos will sync in background\n", folder.ID)
+		logger.Sync("sync_job_created", "Sync job created for folder", map[string]interface{}{
+			"user_id":     userID.String(),
+			"folder_id":   folder.ID.String(),
+			"folder_name": folder.DriveFolderName,
+		})
 	}
 
 	// Register webhook for real-time updates
 	go func() {
 		webhookCtx := context.Background()
+
+		logger.Webhook("register_webhook_start", "Starting webhook registration", map[string]interface{}{
+			"folder_id":   folder.ID.String(),
+			"folder_name": folder.DriveFolderName,
+		})
+
 		startPageToken, err := s.driveClient.GetStartPageToken(webhookCtx, srv)
 		if err != nil {
-			fmt.Printf("⚠️ Warning: Failed to get start page token for webhook: %v\n", err)
+			logger.WebhookError("get_page_token_failed", "Failed to get start page token", err, map[string]interface{}{
+				"folder_id": folder.ID.String(),
+			})
 			return
 		}
+
+		logger.Webhook("page_token_received", "Got start page token", map[string]interface{}{
+			"folder_id":  folder.ID.String(),
+			"page_token": truncateToken(startPageToken),
+		})
 
 		channelID := uuid.New().String()
 		channel, err := s.driveClient.WatchChanges(webhookCtx, srv, channelID, webhookToken, startPageToken)
 		if err != nil {
-			fmt.Printf("⚠️ Warning: Failed to register webhook (this is normal for localhost): %v\n", err)
+			logger.WebhookError("register_webhook_failed", "Failed to register webhook", err, map[string]interface{}{
+				"folder_id":  folder.ID.String(),
+				"channel_id": channelID,
+			})
 			return
 		}
 
@@ -190,17 +284,40 @@ func (s *SharedFolderServiceImpl) AddFolder(ctx context.Context, userID uuid.UUI
 		folder.UpdatedAt = time.Now()
 
 		if err := s.sharedFolderRepo.Update(webhookCtx, folder.ID, folder); err != nil {
-			fmt.Printf("⚠️ Warning: Failed to update folder with webhook info: %v\n", err)
+			logger.WebhookError("update_webhook_info_failed", "Failed to update folder with webhook info", err, map[string]interface{}{
+				"folder_id":  folder.ID.String(),
+				"channel_id": channel.Id,
+			})
 			return
 		}
 
-		fmt.Printf("✅ Webhook registered for folder %s (channel: %s, expires: %v)\n",
-			folder.DriveFolderName, channel.Id, expiry)
+		logger.Webhook("webhook_registered", "Webhook registered successfully", map[string]interface{}{
+			"folder_id":   folder.ID.String(),
+			"folder_name": folder.DriveFolderName,
+			"channel_id":  channel.Id,
+			"resource_id": channel.ResourceId,
+			"expires":     expiry.Format(time.RFC3339),
+		})
 	}()
+
+	logger.Drive("add_folder_complete", "Add folder process completed", map[string]interface{}{
+		"folder_id":       folder.ID.String(),
+		"folder_name":     folder.DriveFolderName,
+		"drive_folder_id": folder.DriveFolderID,
+		"user_id":         userID.String(),
+	})
 
 	// Return immediately - photos will sync in background via SyncWorker
 	// Frontend will receive WebSocket updates: sync:started, sync:progress, sync:completed
 	return folder, nil
+}
+
+// truncateToken truncates token for logging
+func truncateToken(token string) string {
+	if len(token) > 20 {
+		return token[:20] + "..."
+	}
+	return token
 }
 
 // GetUserFolders returns all folders the user has access to
@@ -269,7 +386,10 @@ func (s *SharedFolderServiceImpl) TriggerSync(ctx context.Context, userID uuid.U
 		return fmt.Errorf("failed to create sync job: %w", err)
 	}
 
-	fmt.Printf("✅ Created sync job for folder %s (triggered by user %s)\n", folderID, userID)
+	logger.Sync("manual_sync_created", "Created sync job for folder", map[string]interface{}{
+		"folder_id": folderID.String(),
+		"user_id":   userID.String(),
+	})
 	return nil
 }
 
@@ -315,29 +435,47 @@ func (s *SharedFolderServiceImpl) GetSyncStatus(ctx context.Context, folderID uu
 
 // HandleWebhook handles webhook notifications for shared folders
 func (s *SharedFolderServiceImpl) HandleWebhook(ctx context.Context, channelID, resourceID, resourceState, token string) error {
-	fmt.Printf("📩 SharedFolder HandleWebhook: channelID=%s, resourceState=%s, token=%s\n", channelID, resourceState, token)
+	logger.Webhook("shared_folder_webhook_received", "SharedFolder HandleWebhook", map[string]interface{}{
+		"channel_id":     channelID,
+		"resource_state": resourceState,
+		"token_length":   len(token),
+	})
 
 	// Find shared folder by webhook token
 	folder, err := s.sharedFolderRepo.GetByWebhookToken(ctx, token)
 	if err != nil {
-		fmt.Printf("⚠️ Webhook token not found for shared folder: %v\n", err)
+		logger.Webhook("shared_folder_webhook_token_not_found", "Webhook token not found for shared folder", map[string]interface{}{
+			"error": err.Error(),
+		})
 		return fmt.Errorf("webhook token not found: %w", err)
 	}
 
-	fmt.Printf("✅ Found shared folder %s (%s) for webhook token\n", folder.ID, folder.DriveFolderName)
+	logger.Webhook("shared_folder_found", "Found shared folder for webhook token", map[string]interface{}{
+		"folder_id":   folder.ID.String(),
+		"folder_name": folder.DriveFolderName,
+	})
 
 	// If it's a sync or change event, trigger sync for this folder
 	if resourceState == "sync" || resourceState == "change" {
-		fmt.Printf("🔄 Triggering sync for shared folder %s due to %s event\n", folder.ID, resourceState)
+		logger.Webhook("shared_folder_trigger_sync", "Triggering sync for shared folder", map[string]interface{}{
+			"folder_id":      folder.ID.String(),
+			"resource_state": resourceState,
+		})
 
 		// Get the token owner to trigger sync
 		if err := s.triggerSyncForFolder(ctx, folder); err != nil {
-			fmt.Printf("❌ Failed to trigger sync: %v\n", err)
+			logger.WebhookError("shared_folder_sync_failed", "Failed to trigger sync", err, map[string]interface{}{
+				"folder_id": folder.ID.String(),
+			})
 			return fmt.Errorf("failed to trigger sync: %w", err)
 		}
-		fmt.Printf("✅ Sync triggered successfully for shared folder %s\n", folder.ID)
+		logger.Webhook("shared_folder_sync_triggered", "Sync triggered successfully for shared folder", map[string]interface{}{
+			"folder_id": folder.ID.String(),
+		})
 	} else {
-		fmt.Printf("ℹ️ Ignoring webhook with state: %s\n", resourceState)
+		logger.Webhook("shared_folder_webhook_ignored", "Ignoring webhook with state", map[string]interface{}{
+			"resource_state": resourceState,
+		})
 	}
 
 	return nil
@@ -398,8 +536,12 @@ func (s *SharedFolderServiceImpl) RegisterWebhook(ctx context.Context, userID uu
 		return fmt.Errorf("failed to update folder: %w", err)
 	}
 
-	fmt.Printf("✅ Webhook registered for folder %s (channel: %s, expires: %v)\n",
-		folder.DriveFolderName, channel.Id, expiry)
+	logger.Webhook("webhook_registered", "Webhook registered for folder", map[string]interface{}{
+		"folder_id":   folder.ID.String(),
+		"folder_name": folder.DriveFolderName,
+		"channel_id":  channel.Id,
+		"expires":     expiry.Format(time.RFC3339),
+	})
 
 	return nil
 }
@@ -435,6 +577,9 @@ func (s *SharedFolderServiceImpl) triggerSyncForFolder(ctx context.Context, fold
 		s.syncWorker.TriggerSync()
 	}
 
-	fmt.Printf("✅ Created sync job %s for shared folder %s\n", job.ID, folder.ID)
+	logger.Sync("webhook_sync_job_created", "Created sync job for shared folder", map[string]interface{}{
+		"job_id":    job.ID.String(),
+		"folder_id": folder.ID.String(),
+	})
 	return nil
 }

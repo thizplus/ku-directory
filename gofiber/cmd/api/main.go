@@ -45,7 +45,7 @@ func main() {
 	// Create handlers from services
 	services := container.GetHandlerServices()
 	repos := container.GetHandlerRepositories()
-	h := handlers.NewHandlers(services, repos)
+	h := handlers.NewHandlers(services, repos, container.GetConfig())
 
 	// Setup routes
 	routes.SetupRoutes(app, h)
@@ -57,6 +57,7 @@ func main() {
 	log.Printf("📚 Health check: http://localhost:%s/health", port)
 	log.Printf("📖 API docs: http://localhost:%s/api/v1", port)
 	log.Printf("🔌 WebSocket: ws://localhost:%s/ws", port)
+	log.Printf("📋 Logs API: http://localhost:%s/api/v1/admin/logs", port)
 
 	log.Fatal(app.Listen(":" + port))
 }

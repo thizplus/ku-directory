@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
 	"path/filepath"
 	"time"
 
@@ -16,6 +15,7 @@ import (
 	"gofiber-template/domain/repositories"
 	"gofiber-template/domain/services"
 	"gofiber-template/infrastructure/googledrive"
+	"gofiber-template/pkg/logger"
 )
 
 type DriveServiceImpl struct {
@@ -46,26 +46,38 @@ func (s *DriveServiceImpl) GetAuthURL(state string) string {
 
 // HandleCallback handles OAuth callback and stores tokens
 func (s *DriveServiceImpl) HandleCallback(ctx context.Context, userID uuid.UUID, code string) error {
-	fmt.Printf("🔄 HandleCallback starting for user: %s\n", userID)
+	logger.Drive("oauth_callback_start", "HandleCallback starting", map[string]interface{}{
+		"user_id": userID.String(),
+	})
 
 	// Exchange code for tokens
 	tokenInfo, err := s.driveClient.ExchangeCode(ctx, code)
 	if err != nil {
-		fmt.Printf("❌ ExchangeCode failed: %v\n", err)
+		logger.DriveError("oauth_exchange_failed", "ExchangeCode failed", err, map[string]interface{}{
+			"user_id": userID.String(),
+		})
 		return fmt.Errorf("failed to exchange code: %w", err)
 	}
 
-	fmt.Printf("✅ Got tokens - AccessToken: %d chars, RefreshToken: %d chars\n",
-		len(tokenInfo.AccessToken), len(tokenInfo.RefreshToken))
+	logger.Drive("oauth_tokens_received", "Got tokens", map[string]interface{}{
+		"user_id":              userID.String(),
+		"access_token_length":  len(tokenInfo.AccessToken),
+		"refresh_token_length": len(tokenInfo.RefreshToken),
+	})
 
 	// Get user
 	user, err := s.userRepo.GetByID(ctx, userID)
 	if err != nil {
-		fmt.Printf("❌ GetByID failed: %v\n", err)
+		logger.DriveError("oauth_get_user_failed", "GetByID failed", err, map[string]interface{}{
+			"user_id": userID.String(),
+		})
 		return fmt.Errorf("failed to get user: %w", err)
 	}
 
-	fmt.Printf("✅ Got user: %s\n", user.Email)
+	logger.Drive("oauth_user_found", "Got user", map[string]interface{}{
+		"user_id": userID.String(),
+		"email":   user.Email,
+	})
 
 	// Update user with Drive tokens
 	user.DriveAccessToken = tokenInfo.AccessToken
@@ -74,11 +86,16 @@ func (s *DriveServiceImpl) HandleCallback(ctx context.Context, userID uuid.UUID,
 	user.UpdatedAt = time.Now()
 
 	if err := s.userRepo.Update(ctx, userID, user); err != nil {
-		fmt.Printf("❌ Update failed: %v\n", err)
+		logger.DriveError("oauth_update_failed", "Update failed", err, map[string]interface{}{
+			"user_id": userID.String(),
+		})
 		return fmt.Errorf("failed to update user: %w", err)
 	}
 
-	fmt.Println("✅ User updated with Drive tokens")
+	logger.Drive("oauth_callback_complete", "User updated with Drive tokens", map[string]interface{}{
+		"user_id": userID.String(),
+		"email":   user.Email,
+	})
 
 	return nil
 }
@@ -202,7 +219,9 @@ func (s *DriveServiceImpl) SetRootFolder(ctx context.Context, userID uuid.UUID, 
 	// Get start page token for change tracking
 	startPageToken, err := s.driveClient.GetStartPageToken(ctx, srv)
 	if err != nil {
-		log.Printf("Warning: Failed to get start page token: %v", err)
+		logger.DriveError("page_token_failed", "Failed to get start page token", err, map[string]interface{}{
+			"user_id": userID.String(),
+		})
 	} else {
 		user.DrivePageToken = startPageToken
 	}
@@ -213,15 +232,23 @@ func (s *DriveServiceImpl) SetRootFolder(ctx context.Context, userID uuid.UUID, 
 	_, watchErr := s.driveClient.WatchChanges(ctx, srv, channelID, user.DriveWebhookToken, startPageToken)
 	if watchErr != nil {
 		// Log but don't fail - webhook is optional for local development
-		log.Printf("Warning: Failed to register Drive webhook (this is normal for localhost): %v", watchErr)
+		logger.WebhookError("webhook_register_failed", "Failed to register Drive webhook (this is normal for localhost)", watchErr, map[string]interface{}{
+			"user_id": userID.String(),
+		})
 	} else {
-		log.Printf("Drive Changes webhook registered for user %s (watching all Drive changes)", userID)
+		logger.Webhook("webhook_registered", "Drive Changes webhook registered", map[string]interface{}{
+			"user_id":    userID.String(),
+			"channel_id": channelID,
+		})
 	}
 
 	// Get folder name for path-based queries (shared folder model)
 	folderInfo, err := s.driveClient.GetFile(ctx, srv, folderID)
 	if err != nil {
-		log.Printf("Warning: Failed to get folder name: %v", err)
+		logger.DriveError("get_folder_name_failed", "Failed to get folder name", err, map[string]interface{}{
+			"user_id":   userID.String(),
+			"folder_id": folderID,
+		})
 	} else {
 		user.DriveRootFolderName = folderInfo.Name
 	}
@@ -341,7 +368,11 @@ func (s *DriveServiceImpl) GetSyncStatus(ctx context.Context, userID uuid.UUID) 
 			job.CompletedAt = &now
 			job.UpdatedAt = now
 			s.syncJobRepo.Update(ctx, job.ID, job)
-			log.Printf("Auto-reset stuck sync job %s for user %s", job.ID, userID)
+			logger.Sync("job_auto_reset", "Auto-reset stuck sync job", map[string]interface{}{
+				"job_id":  job.ID.String(),
+				"user_id": userID.String(),
+				"reason":  "timeout_30_minutes",
+			})
 		}
 	}
 
@@ -447,7 +478,10 @@ func (s *DriveServiceImpl) DownloadPhotosAsZip(ctx context.Context, userID uuid.
 		// Get file metadata
 		file, err := srv.Files.Get(fileID).Fields("id, name, mimeType").Do()
 		if err != nil {
-			log.Printf("Warning: failed to get file %s: %v", fileID, err)
+			logger.DriveError("zip_get_file_failed", "Failed to get file metadata", err, map[string]interface{}{
+				"file_id": fileID,
+				"user_id": userID.String(),
+			})
 			continue
 		}
 
@@ -463,7 +497,11 @@ func (s *DriveServiceImpl) DownloadPhotosAsZip(ctx context.Context, userID uuid.
 		// Download file content
 		resp, err := srv.Files.Get(fileID).Download()
 		if err != nil {
-			log.Printf("Warning: failed to download file %s: %v", fileID, err)
+			logger.DriveError("zip_download_failed", "Failed to download file", err, map[string]interface{}{
+				"file_id":   fileID,
+				"file_name": file.Name,
+				"user_id":   userID.String(),
+			})
 			continue
 		}
 
@@ -480,7 +518,10 @@ func (s *DriveServiceImpl) DownloadPhotosAsZip(ctx context.Context, userID uuid.
 		zipFile, err := zipWriter.Create(filename)
 		if err != nil {
 			resp.Body.Close()
-			log.Printf("Warning: failed to create zip entry for %s: %v", filename, err)
+			logger.DriveError("zip_create_entry_failed", "Failed to create zip entry", err, map[string]interface{}{
+				"file_name": filename,
+				"user_id":   userID.String(),
+			})
 			continue
 		}
 
@@ -488,7 +529,10 @@ func (s *DriveServiceImpl) DownloadPhotosAsZip(ctx context.Context, userID uuid.
 		_, err = io.Copy(zipFile, resp.Body)
 		resp.Body.Close()
 		if err != nil {
-			log.Printf("Warning: failed to write file %s to zip: %v", filename, err)
+			logger.DriveError("zip_write_failed", "Failed to write file to zip", err, map[string]interface{}{
+				"file_name": filename,
+				"user_id":   userID.String(),
+			})
 			continue
 		}
 	}
@@ -503,30 +547,47 @@ func (s *DriveServiceImpl) DownloadPhotosAsZip(ctx context.Context, userID uuid.
 
 // HandleWebhook handles Google Drive webhook notifications
 func (s *DriveServiceImpl) HandleWebhook(ctx context.Context, channelID, resourceID, resourceState, token string) error {
-	log.Printf("📩 HandleWebhook: channelID=%s, resourceState=%s, token=%s", channelID, resourceState, token)
+	logger.Webhook("webhook_received", "HandleWebhook received", map[string]interface{}{
+		"channel_id":     channelID,
+		"resource_state": resourceState,
+		"token_length":   len(token),
+	})
 
 	// Try to find user by webhook token first
 	user, err := s.userRepo.GetByDriveWebhookToken(ctx, token)
 	if err != nil {
-		log.Printf("⚠️ Webhook token not found for user, might be shared folder token: %v", err)
+		logger.Webhook("webhook_token_not_found", "Webhook token not found for user, might be shared folder token", map[string]interface{}{
+			"error": err.Error(),
+		})
 		// Token not found for user - this is expected for shared folder webhooks
 		// The shared folder handler will handle it separately
 		return fmt.Errorf("webhook token not found: %w", err)
 	}
 
-	log.Printf("✅ Found user %s for webhook token", user.ID)
+	logger.Webhook("webhook_user_found", "Found user for webhook token", map[string]interface{}{
+		"user_id": user.ID.String(),
+	})
 
 	// If it's a sync or change event, trigger incremental sync
 	if resourceState == "sync" || resourceState == "change" {
-		log.Printf("🔄 Triggering sync for user %s due to %s event", user.ID, resourceState)
+		logger.Webhook("webhook_trigger_sync", "Triggering sync due to webhook event", map[string]interface{}{
+			"user_id":        user.ID.String(),
+			"resource_state": resourceState,
+		})
 		_, err := s.StartSync(ctx, user.ID)
 		if err != nil {
-			log.Printf("❌ Failed to start sync: %v", err)
+			logger.WebhookError("webhook_sync_failed", "Failed to start sync", err, map[string]interface{}{
+				"user_id": user.ID.String(),
+			})
 			return fmt.Errorf("failed to start sync: %w", err)
 		}
-		log.Printf("✅ Sync triggered successfully for user %s", user.ID)
+		logger.Webhook("webhook_sync_triggered", "Sync triggered successfully", map[string]interface{}{
+			"user_id": user.ID.String(),
+		})
 	} else {
-		log.Printf("ℹ️ Ignoring webhook with state: %s", resourceState)
+		logger.Webhook("webhook_ignored", "Ignoring webhook with state", map[string]interface{}{
+			"resource_state": resourceState,
+		})
 	}
 
 	return nil

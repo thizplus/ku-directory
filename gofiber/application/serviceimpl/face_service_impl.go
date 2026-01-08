@@ -3,7 +3,6 @@ package serviceimpl
 import (
 	"context"
 	"fmt"
-	"log"
 
 	"github.com/google/uuid"
 	"github.com/pgvector/pgvector-go"
@@ -12,6 +11,7 @@ import (
 	"gofiber-template/domain/repositories"
 	"gofiber-template/domain/services"
 	"gofiber-template/infrastructure/faceapi"
+	"gofiber-template/pkg/logger"
 )
 
 type FaceServiceImpl struct {
@@ -325,7 +325,9 @@ func (s *FaceServiceImpl) GetFaceCount(ctx context.Context, userID uuid.UUID) (i
 
 // GetProcessingStats returns face processing statistics
 func (s *FaceServiceImpl) GetProcessingStats(ctx context.Context, userID uuid.UUID) (*services.FaceProcessingStats, error) {
-	log.Printf("📊 GetProcessingStats called for user: %s", userID)
+	logger.Face("get_processing_stats", "GetProcessingStats called", map[string]interface{}{
+		"user_id": userID.String(),
+	})
 
 	// Get user's accessible shared folders
 	folders, err := s.sharedFolderRepo.GetFoldersByUser(ctx, userID)
@@ -333,11 +335,16 @@ func (s *FaceServiceImpl) GetProcessingStats(ctx context.Context, userID uuid.UU
 		return nil, fmt.Errorf("failed to get user folders: %w", err)
 	}
 
-	log.Printf("📊 Found %d folders for user %s", len(folders), userID)
+	logger.Face("folders_found", "Found folders for user", map[string]interface{}{
+		"user_id":      userID.String(),
+		"folder_count": len(folders),
+	})
 
 	// If user has no folders, return empty stats
 	if len(folders) == 0 {
-		log.Printf("📊 User %s has no folders, returning empty stats", userID)
+		logger.Face("no_folders", "User has no folders, returning empty stats", map[string]interface{}{
+			"user_id": userID.String(),
+		})
 		return &services.FaceProcessingStats{
 			TotalPhotos:     0,
 			ProcessedPhotos: 0,
@@ -405,7 +412,10 @@ func (s *FaceServiceImpl) GetProcessingStats(ctx context.Context, userID uuid.UU
 
 // RetryFailedPhotos resets failed photos to pending for reprocessing
 func (s *FaceServiceImpl) RetryFailedPhotos(ctx context.Context, userID uuid.UUID, folderID *uuid.UUID) (int64, error) {
-	log.Printf("🔄 RetryFailedPhotos called for user: %s, folder: %v", userID, folderID)
+	logger.Face("retry_failed_start", "RetryFailedPhotos called", map[string]interface{}{
+		"user_id":   userID.String(),
+		"folder_id": folderID,
+	})
 
 	// Get user's accessible folders to validate
 	folders, err := s.sharedFolderRepo.GetFoldersByUser(ctx, userID)
@@ -436,6 +446,10 @@ func (s *FaceServiceImpl) RetryFailedPhotos(ctx context.Context, userID uuid.UUI
 		return 0, fmt.Errorf("failed to reset failed photos: %w", err)
 	}
 
-	log.Printf("🔄 Reset %d failed photos to pending", count)
+	logger.Face("retry_failed_complete", "Reset failed photos to pending", map[string]interface{}{
+		"user_id":     userID.String(),
+		"folder_id":   folderID,
+		"reset_count": count,
+	})
 	return count, nil
 }

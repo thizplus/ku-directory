@@ -11,6 +11,7 @@ import (
 	"gofiber-template/domain/services"
 	"gofiber-template/infrastructure/gemini"
 	"gofiber-template/infrastructure/googledrive"
+	"gofiber-template/pkg/logger"
 )
 
 type NewsServiceImpl struct {
@@ -137,7 +138,10 @@ func (s *NewsServiceImpl) GenerateNews(ctx context.Context, userID uuid.UUID, re
 			)
 			if err != nil {
 				// Skip failed downloads, continue with others
-				fmt.Printf("Warning: Failed to download image %s: %v\n", photo.FileName, err)
+				logger.DriveError("news_image_download_failed", "Failed to download image for news", err, map[string]interface{}{
+					"file_name":     photo.FileName,
+					"drive_file_id": photo.DriveFileID,
+				})
 				continue
 			}
 

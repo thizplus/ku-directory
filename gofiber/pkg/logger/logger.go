@@ -21,6 +21,7 @@ const (
 	CategoryAPI       Category = "api"
 	CategoryDB        Category = "db"
 	CategoryDrive     Category = "drive"
+	CategoryFace      Category = "face"
 )
 
 // Level represents log level
@@ -345,6 +346,33 @@ func DriveError(action, message string, err error, data map[string]interface{}) 
 	})
 }
 
+// Face logs face recognition operations
+func Face(action, message string, data map[string]interface{}) {
+	Default().Log(LogEntry{
+		Level:    LevelInfo,
+		Category: CategoryFace,
+		Action:   action,
+		Message:  message,
+		Data:     data,
+	})
+}
+
+// FaceError logs face recognition errors
+func FaceError(action, message string, err error, data map[string]interface{}) {
+	errStr := ""
+	if err != nil {
+		errStr = err.Error()
+	}
+	Default().Log(LogEntry{
+		Level:    LevelError,
+		Category: CategoryFace,
+		Action:   action,
+		Message:  message,
+		Error:    errStr,
+		Data:     data,
+	})
+}
+
 // Info logs info level message
 func Info(category Category, action, message string, data map[string]interface{}) {
 	Default().Log(LogEntry{
@@ -392,4 +420,171 @@ func Warn(category Category, action, message string, data map[string]interface{}
 		Message:  message,
 		Data:     data,
 	})
+}
+
+// ReadLogsOptions options for reading logs
+type ReadLogsOptions struct {
+	Category Category // Filter by category (empty = all)
+	Level    Level    // Filter by level (empty = all)
+	Lines    int      // Number of lines to return (default 100)
+	Search   string   // Search in message/action
+}
+
+// ReadLogs reads log entries from files
+func ReadLogs(opts ReadLogsOptions) ([]LogEntry, error) {
+	return Default().ReadLogs(opts)
+}
+
+// ReadLogs reads log entries from the logger's log directory
+func (l *Logger) ReadLogs(opts ReadLogsOptions) ([]LogEntry, error) {
+	if opts.Lines <= 0 {
+		opts.Lines = 100
+	}
+	if opts.Lines > 1000 {
+		opts.Lines = 1000 // Max limit
+	}
+
+	var entries []LogEntry
+
+	// Get today's date for log files
+	today := time.Now().Format("2006-01-02")
+
+	// Determine which categories to read
+	categories := []Category{CategoryAuth, CategoryWebhook, CategoryWebSocket, CategorySync, CategoryAPI, CategoryDB, CategoryDrive, CategoryFace}
+	if opts.Category != "" {
+		categories = []Category{opts.Category}
+	}
+
+	// Read from each category file
+	for _, cat := range categories {
+		filename := fmt.Sprintf("%s_%s.log", cat, today)
+		filePath := filepath.Join(l.logDir, filename)
+
+		// Read file if exists
+		data, err := os.ReadFile(filePath)
+		if err != nil {
+			continue // Skip if file doesn't exist
+		}
+
+		// Parse each line as JSON
+		lines := splitLines(string(data))
+		for _, line := range lines {
+			if line == "" {
+				continue
+			}
+
+			var entry LogEntry
+			if err := json.Unmarshal([]byte(line), &entry); err != nil {
+				continue
+			}
+
+			// Apply filters
+			if opts.Level != "" && entry.Level != opts.Level {
+				continue
+			}
+			if opts.Search != "" {
+				if !containsIgnoreCase(entry.Message, opts.Search) &&
+					!containsIgnoreCase(entry.Action, opts.Search) &&
+					!containsIgnoreCase(entry.Error, opts.Search) {
+					continue
+				}
+			}
+
+			entries = append(entries, entry)
+		}
+	}
+
+	// Sort by timestamp descending (newest first)
+	sortEntriesByTime(entries)
+
+	// Limit results
+	if len(entries) > opts.Lines {
+		entries = entries[:opts.Lines]
+	}
+
+	return entries, nil
+}
+
+// GetLogDir returns the log directory path
+func GetLogDir() string {
+	return Default().logDir
+}
+
+// ListLogFiles returns list of log files
+func ListLogFiles() ([]string, error) {
+	return Default().ListLogFiles()
+}
+
+// ListLogFiles returns list of log files in the log directory
+func (l *Logger) ListLogFiles() ([]string, error) {
+	var files []string
+
+	entries, err := os.ReadDir(l.logDir)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, entry := range entries {
+		if !entry.IsDir() && filepath.Ext(entry.Name()) == ".log" {
+			files = append(files, entry.Name())
+		}
+	}
+
+	return files, nil
+}
+
+// Helper functions
+
+func splitLines(s string) []string {
+	var lines []string
+	start := 0
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\n' {
+			lines = append(lines, s[start:i])
+			start = i + 1
+		}
+	}
+	if start < len(s) {
+		lines = append(lines, s[start:])
+	}
+	return lines
+}
+
+func containsIgnoreCase(s, substr string) bool {
+	s = toLower(s)
+	substr = toLower(substr)
+	return contains(s, substr)
+}
+
+func toLower(s string) string {
+	b := make([]byte, len(s))
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c >= 'A' && c <= 'Z' {
+			c += 'a' - 'A'
+		}
+		b[i] = c
+	}
+	return string(b)
+}
+
+func contains(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}
+
+func sortEntriesByTime(entries []LogEntry) {
+	// Simple bubble sort (good enough for small arrays)
+	n := len(entries)
+	for i := 0; i < n-1; i++ {
+		for j := 0; j < n-i-1; j++ {
+			if entries[j].Timestamp.Before(entries[j+1].Timestamp) {
+				entries[j], entries[j+1] = entries[j+1], entries[j]
+			}
+		}
+	}
 }

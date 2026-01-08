@@ -176,71 +176,83 @@ func (w *SyncWorker) processJob(job models.SyncJob) {
 	ctx := w.ctx
 	jobID := job.ID
 
-	log.Println("╔════════════════════════════════════════════════════════════════")
-	log.Printf("║ SYNC JOB STARTED: %s", jobID)
-	log.Println("╠════════════════════════════════════════════════════════════════")
+	logger.Sync("job_started", "Sync job started", map[string]interface{}{
+		"job_id": jobID.String(),
+	})
 
 	// Parse metadata to get SharedFolderID
-	log.Println("║ [STEP 1/6] Parsing job metadata...")
 	var metadata SyncJobMetadata
 	if job.Metadata != "" {
 		json.Unmarshal([]byte(job.Metadata), &metadata)
 	}
 
 	if metadata.SharedFolderID == uuid.Nil {
-		log.Println("║ ❌ FAILED: Missing shared_folder_id in job metadata")
-		log.Println("╚════════════════════════════════════════════════════════════════")
+		logger.SyncError("job_failed", "Missing shared_folder_id in job metadata", nil, map[string]interface{}{
+			"job_id": jobID.String(),
+		})
 		w.failJob(ctx, jobID, nil, "Missing shared_folder_id in job metadata")
 		return
 	}
-	log.Printf("║ ✓ SharedFolderID: %s", metadata.SharedFolderID)
+
+	logger.Sync("job_metadata_parsed", "Job metadata parsed", map[string]interface{}{
+		"job_id":           jobID.String(),
+		"shared_folder_id": metadata.SharedFolderID.String(),
+	})
 
 	// Update job status to running
-	log.Println("║ [STEP 2/6] Updating job status to RUNNING...")
 	if err := w.syncJobRepo.UpdateStatus(ctx, jobID, models.SyncJobStatusRunning); err != nil {
-		log.Printf("║ ❌ Error updating job status: %v", err)
-		log.Println("╚════════════════════════════════════════════════════════════════")
+		logger.SyncError("update_status_failed", "Failed to update job status", err, map[string]interface{}{
+			"job_id": jobID.String(),
+		})
 		return
 	}
-	log.Println("║ ✓ Job status updated")
 
 	// Get shared folder
-	log.Println("║ [STEP 3/6] Fetching shared folder from database...")
 	folder, err := w.sharedFolderRepo.GetByID(ctx, metadata.SharedFolderID)
 	if err != nil {
-		log.Printf("║ ❌ Failed to get shared folder: %v", err)
-		log.Println("╚════════════════════════════════════════════════════════════════")
+		logger.SyncError("get_folder_failed", "Failed to get shared folder", err, map[string]interface{}{
+			"job_id":           jobID.String(),
+			"shared_folder_id": metadata.SharedFolderID.String(),
+		})
 		w.failJob(ctx, jobID, nil, fmt.Sprintf("Failed to get shared folder: %v", err))
 		return
 	}
-	log.Printf("║ ✓ Folder: %s (%s)", folder.DriveFolderName, folder.DriveFolderID)
-	log.Printf("║   - PageToken: %s", truncateString(folder.PageToken, 20))
-	log.Printf("║   - HasRefreshToken: %v", folder.DriveRefreshToken != "")
+
+	logger.Sync("folder_loaded", "Shared folder loaded", map[string]interface{}{
+		"job_id":            jobID.String(),
+		"folder_id":         folder.ID.String(),
+		"folder_name":       folder.DriveFolderName,
+		"drive_folder_id":   folder.DriveFolderID,
+		"has_page_token":    folder.PageToken != "",
+		"has_refresh_token": folder.DriveRefreshToken != "",
+	})
 
 	// Broadcast sync started to all users with access
-	log.Println("║ [STEP 4/6] Broadcasting sync:started to users...")
 	w.broadcastToFolderUsers(ctx, folder.ID, "sync:started", map[string]interface{}{
 		"jobId":    jobID.String(),
 		"folderId": folder.ID.String(),
 		"status":   "running",
 	})
-	log.Println("║ ✓ Broadcast sent")
 
 	// Update folder sync status
 	w.sharedFolderRepo.UpdateSyncStatus(ctx, folder.ID, models.SyncStatusSyncing, "")
 
 	// Check if folder has valid tokens
-	log.Println("║ [STEP 5/6] Validating OAuth tokens...")
 	if folder.DriveRefreshToken == "" {
-		log.Println("║ ❌ Folder has no valid OAuth tokens")
-		log.Println("╚════════════════════════════════════════════════════════════════")
+		logger.SyncError("no_oauth_tokens", "Folder has no valid OAuth tokens", nil, map[string]interface{}{
+			"job_id":    jobID.String(),
+			"folder_id": folder.ID.String(),
+		})
 		w.failJob(ctx, jobID, &folder.ID, "Folder has no valid OAuth tokens")
 		return
 	}
-	log.Println("║ ✓ OAuth tokens present")
 
 	// Get Drive service using folder's tokens
-	log.Println("║ [STEP 6/6] Creating Google Drive service...")
+	logger.Sync("get_drive_service", "Getting Google Drive service", map[string]interface{}{
+		"job_id":    jobID.String(),
+		"folder_id": folder.ID.String(),
+	})
+
 	expiry := time.Now()
 	if folder.DriveTokenExpiry != nil {
 		expiry = *folder.DriveTokenExpiry
@@ -248,22 +260,35 @@ func (w *SyncWorker) processJob(job models.SyncJob) {
 
 	srv, err := w.driveClient.GetDriveService(ctx, folder.DriveAccessToken, folder.DriveRefreshToken, expiry)
 	if err != nil {
-		log.Printf("║ ❌ Failed to get drive service: %v", err)
-		log.Println("╚════════════════════════════════════════════════════════════════")
+		logger.SyncError("get_drive_service_failed", "Failed to get drive service", err, map[string]interface{}{
+			"job_id":    jobID.String(),
+			"folder_id": folder.ID.String(),
+		})
 		w.failJob(ctx, jobID, &folder.ID, fmt.Sprintf("Failed to get drive service: %v", err))
 		return
 	}
-	log.Println("║ ✓ Drive service created")
-	log.Println("╠════════════════════════════════════════════════════════════════")
+
+	logger.Sync("drive_service_ready", "Google Drive service ready", map[string]interface{}{
+		"job_id":    jobID.String(),
+		"folder_id": folder.ID.String(),
+	})
 
 	// Decide: Incremental sync or Full sync
 	if folder.PageToken != "" {
-		log.Println("║ MODE: INCREMENTAL SYNC (has page token)")
-		log.Println("╚════════════════════════════════════════════════════════════════")
+		logger.Sync("sync_mode", "Starting incremental sync", map[string]interface{}{
+			"job_id":      jobID.String(),
+			"folder_id":   folder.ID.String(),
+			"folder_name": folder.DriveFolderName,
+			"mode":        "incremental",
+		})
 		w.processIncrementalSync(ctx, job, folder, srv)
 	} else {
-		log.Println("║ MODE: FULL SYNC (no page token)")
-		log.Println("╚════════════════════════════════════════════════════════════════")
+		logger.Sync("sync_mode", "Starting full sync", map[string]interface{}{
+			"job_id":      jobID.String(),
+			"folder_id":   folder.ID.String(),
+			"folder_name": folder.DriveFolderName,
+			"mode":        "full",
+		})
 		w.processFullSync(ctx, job, folder, srv)
 	}
 }
@@ -824,7 +849,14 @@ func (w *SyncWorker) flushPhotoBatch(ctx context.Context, photos []*models.Photo
 
 // failJob marks a job as failed
 func (w *SyncWorker) failJob(ctx context.Context, jobID uuid.UUID, folderID *uuid.UUID, errMsg string) {
-	log.Printf("Sync job %s failed: %s", jobID, errMsg)
+	logData := map[string]interface{}{
+		"job_id": jobID.String(),
+		"error":  errMsg,
+	}
+	if folderID != nil {
+		logData["folder_id"] = folderID.String()
+	}
+	logger.SyncError("job_failed", "Sync job failed", nil, logData)
 
 	now := time.Now()
 	w.syncJobRepo.Update(ctx, jobID, &models.SyncJob{

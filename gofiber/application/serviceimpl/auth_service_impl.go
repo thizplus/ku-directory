@@ -12,6 +12,7 @@ import (
 	"gofiber-template/domain/repositories"
 	"gofiber-template/domain/services"
 	"gofiber-template/infrastructure/oauth"
+	"gofiber-template/pkg/logger"
 )
 
 type AuthServiceImpl struct {
@@ -59,10 +60,13 @@ func (s *AuthServiceImpl) HandleGoogleCallback(ctx context.Context, code string)
 	now := time.Now()
 	user.LastLogin = &now
 
-	// Debug: Log token info
-	fmt.Printf("🔑 TokenResp AccessToken length: %d\n", len(tokenResp.AccessToken))
-	fmt.Printf("🔑 TokenResp RefreshToken length: %d\n", len(tokenResp.RefreshToken))
-	fmt.Printf("🔑 TokenResp ExpiresIn: %d\n", tokenResp.ExpiresIn)
+	// Log token info
+	logger.Drive("oauth_tokens_info", "Token response received", map[string]interface{}{
+		"user_id":              user.ID.String(),
+		"access_token_length":  len(tokenResp.AccessToken),
+		"refresh_token_length": len(tokenResp.RefreshToken),
+		"expires_in":           tokenResp.ExpiresIn,
+	})
 
 	user.DriveAccessToken = tokenResp.AccessToken
 	if tokenResp.RefreshToken != "" {
@@ -73,9 +77,14 @@ func (s *AuthServiceImpl) HandleGoogleCallback(ctx context.Context, code string)
 	user.UpdatedAt = now
 
 	if err := s.userRepo.Update(ctx, user.ID, user); err != nil {
-		fmt.Printf("❌ Failed to update user tokens: %v\n", err)
+		logger.DriveError("user_token_update_failed", "Failed to update user tokens", err, map[string]interface{}{
+			"user_id": user.ID.String(),
+		})
 	} else {
-		fmt.Printf("✅ User tokens updated successfully\n")
+		logger.Drive("user_token_updated", "User tokens updated successfully", map[string]interface{}{
+			"user_id": user.ID.String(),
+			"email":   user.Email,
+		})
 	}
 
 	// Generate JWT token

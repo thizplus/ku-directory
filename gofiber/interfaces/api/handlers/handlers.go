@@ -3,6 +3,7 @@ package handlers
 import (
 	"gofiber-template/domain/repositories"
 	"gofiber-template/domain/services"
+	"gofiber-template/pkg/config"
 )
 
 // Services contains all the services needed for handlers
@@ -36,6 +37,7 @@ type Handlers struct {
 	FaceHandler         *FaceHandler
 	NewsHandler         *NewsHandler
 	SharedFolderHandler *SharedFolderHandler
+	LogHandler          *LogHandler
 
 	// Short accessors for routes
 	User         *UserHandler
@@ -47,10 +49,11 @@ type Handlers struct {
 	Face         *FaceHandler
 	News         *NewsHandler
 	SharedFolder *SharedFolderHandler
+	Log          *LogHandler
 }
 
 // NewHandlers creates a new instance of Handlers with all dependencies
-func NewHandlers(services *Services, repos *Repositories) *Handlers {
+func NewHandlers(services *Services, repos *Repositories, cfg *config.Config) *Handlers {
 	userHandler := NewUserHandler(services.UserService)
 	taskHandler := NewTaskHandler(services.TaskService)
 	fileHandler := NewFileHandler(services.FileService)
@@ -59,6 +62,7 @@ func NewHandlers(services *Services, repos *Repositories) *Handlers {
 	driveHandler := NewDriveHandler(services.DriveService)
 	faceHandler := NewFaceHandler(services.FaceService)
 	newsHandler := NewNewsHandler(services.NewsService)
+	logHandler := NewLogHandler(cfg)
 
 	var sharedFolderHandler *SharedFolderHandler
 	if services.SharedFolderService != nil && repos != nil {
@@ -82,6 +86,7 @@ func NewHandlers(services *Services, repos *Repositories) *Handlers {
 		FaceHandler:         faceHandler,
 		NewsHandler:         newsHandler,
 		SharedFolderHandler: sharedFolderHandler,
+		LogHandler:          logHandler,
 
 		// Short accessors
 		User:         userHandler,
@@ -93,5 +98,6 @@ func NewHandlers(services *Services, repos *Repositories) *Handlers {
 		Face:         faceHandler,
 		News:         newsHandler,
 		SharedFolder: sharedFolderHandler,
+		Log:          logHandler,
 	}
 }

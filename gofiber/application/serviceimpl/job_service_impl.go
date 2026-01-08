@@ -4,14 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
+
+	"github.com/google/uuid"
+
 	"gofiber-template/domain/dto"
 	"gofiber-template/domain/models"
 	"gofiber-template/domain/repositories"
 	"gofiber-template/domain/services"
+	"gofiber-template/pkg/logger"
 	"gofiber-template/pkg/scheduler"
-	"time"
-
-	"github.com/google/uuid"
 )
 
 type JobServiceImpl struct {
@@ -206,7 +208,11 @@ func (s *JobServiceImpl) StopJob(ctx context.Context, jobID uuid.UUID) error {
 func (s *JobServiceImpl) ExecuteJob(ctx context.Context, job *models.Job) error {
 	now := time.Now()
 
-	fmt.Printf("Executing job: %s at %s\n", job.Name, now.Format(time.RFC3339))
+	logger.Sync("job_execute", "Executing job", map[string]interface{}{
+		"job_id":   job.ID.String(),
+		"job_name": job.Name,
+		"time":     now.Format(time.RFC3339),
+	})
 
 	job.LastRun = &now
 	job.Status = "running"
