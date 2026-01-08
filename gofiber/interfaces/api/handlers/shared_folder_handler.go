@@ -329,6 +329,7 @@ func (h *SharedFolderHandler) RemoveFolder(c *fiber.Ctx) error {
 // @Tags Folders
 // @Security BearerAuth
 // @Param id path string true "Folder ID"
+// @Param force query bool false "Force full sync (re-sync all photos)"
 // @Success 200
 // @Router /folders/{id}/sync [post]
 func (h *SharedFolderHandler) TriggerSync(c *fiber.Ctx) error {
@@ -348,16 +349,24 @@ func (h *SharedFolderHandler) TriggerSync(c *fiber.Ctx) error {
 		})
 	}
 
-	if err := h.sharedFolderService.TriggerSync(c.Context(), userCtx.ID, folderID); err != nil {
+	// Check for force full sync parameter
+	forceFullSync := c.QueryBool("force", false)
+
+	if err := h.sharedFolderService.TriggerSync(c.Context(), userCtx.ID, folderID, forceFullSync); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"success": false,
 			"error":   err.Error(),
 		})
 	}
 
+	message := "Sync triggered"
+	if forceFullSync {
+		message = "Full sync triggered"
+	}
+
 	return c.JSON(fiber.Map{
 		"success": true,
-		"message": "Sync triggered",
+		"message": message,
 	})
 }
 

@@ -19,6 +19,7 @@ type SharedFolderRepository interface {
 	Update(ctx context.Context, id uuid.UUID, folder *models.SharedFolder) error
 	UpdateSyncStatus(ctx context.Context, id uuid.UUID, status models.SyncStatus, lastError string) error
 	UpdateTokens(ctx context.Context, id uuid.UUID, accessToken, refreshToken string, expiry *time.Time, ownerID uuid.UUID) error
+	ResetSyncState(ctx context.Context, id uuid.UUID) error // Reset PageToken and LastSyncedAt for force full sync
 	Delete(ctx context.Context, id uuid.UUID) error
 
 	// User folder access

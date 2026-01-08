@@ -543,7 +543,8 @@ func (s *SharedFolderServiceImpl) RemoveUserAccess(ctx context.Context, userID u
 }
 
 // TriggerSync triggers a sync for a specific folder
-func (s *SharedFolderServiceImpl) TriggerSync(ctx context.Context, userID uuid.UUID, folderID uuid.UUID) error {
+// If forceFullSync is true, resets the folder state to trigger a full sync instead of incremental
+func (s *SharedFolderServiceImpl) TriggerSync(ctx context.Context, userID uuid.UUID, folderID uuid.UUID, forceFullSync bool) error {
 	// Verify user has access
 	hasAccess, err := s.sharedFolderRepo.HasUserAccess(ctx, userID, folderID)
 	if err != nil {
@@ -553,14 +554,28 @@ func (s *SharedFolderServiceImpl) TriggerSync(ctx context.Context, userID uuid.U
 		return fmt.Errorf("folder not found")
 	}
 
+	// If force full sync, reset folder state
+	if forceFullSync {
+		logger.Sync("force_full_sync", "Resetting folder state for full sync", map[string]interface{}{
+			"folder_id": folderID.String(),
+			"user_id":   userID.String(),
+		})
+
+		// Reset LastSyncedAt and PageToken to force full sync
+		if err := s.sharedFolderRepo.ResetSyncState(ctx, folderID); err != nil {
+			return fmt.Errorf("failed to reset sync state: %w", err)
+		}
+	}
+
 	// Create sync job
 	if err := s.createSyncJob(ctx, userID, folderID); err != nil {
 		return fmt.Errorf("failed to create sync job: %w", err)
 	}
 
 	logger.Sync("manual_sync_created", "Created sync job for folder", map[string]interface{}{
-		"folder_id": folderID.String(),
-		"user_id":   userID.String(),
+		"folder_id":       folderID.String(),
+		"user_id":         userID.String(),
+		"force_full_sync": forceFullSync,
 	})
 	return nil
 }

@@ -15,7 +15,7 @@ type SharedFolderService interface {
 	RemoveUserAccess(ctx context.Context, userID uuid.UUID, folderID uuid.UUID) error
 
 	// Sync operations
-	TriggerSync(ctx context.Context, userID uuid.UUID, folderID uuid.UUID) error
+	TriggerSync(ctx context.Context, userID uuid.UUID, folderID uuid.UUID, forceFullSync bool) error
 	GetSyncStatus(ctx context.Context, folderID uuid.UUID) (*models.SharedFolder, error)
 
 	// Webhook handling

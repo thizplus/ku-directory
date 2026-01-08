@@ -100,6 +100,15 @@ func (r *SharedFolderRepositoryImpl) UpdateTokens(ctx context.Context, id uuid.U
 	}).Error
 }
 
+// ResetSyncState resets PageToken and LastSyncedAt to force a full sync
+func (r *SharedFolderRepositoryImpl) ResetSyncState(ctx context.Context, id uuid.UUID) error {
+	return r.db.WithContext(ctx).Model(&models.SharedFolder{}).Where("id = ?", id).Updates(map[string]interface{}{
+		"page_token":     "",
+		"last_synced_at": nil,
+		"updated_at":     time.Now(),
+	}).Error
+}
+
 // Delete deletes a shared folder
 func (r *SharedFolderRepositoryImpl) Delete(ctx context.Context, id uuid.UUID) error {
 	return r.db.WithContext(ctx).Where("id = ?", id).Delete(&models.SharedFolder{}).Error
