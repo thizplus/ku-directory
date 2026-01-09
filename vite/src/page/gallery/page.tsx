@@ -27,6 +27,7 @@ import {
   Settings,
   Search,
   MoreHorizontal,
+  Link2,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -52,6 +53,7 @@ import {
   useSharedFolders,
   useFolderPhotos,
   useTriggerFolderSync,
+  useReconnectFolder,
 } from "@/features/folders"
 import { useFaceStats, useRetryFailedPhotos } from "@/features/face-search"
 import { useAuth } from "@/hooks/use-auth"
@@ -270,14 +272,18 @@ function FolderItemGrid({
   onClick,
   onSync,
   onForceSync,
+  onReconnect,
   isSyncing,
+  hasError,
 }: {
   name: string
   photoCount: number
   onClick: () => void
   onSync?: () => void
   onForceSync?: () => void
+  onReconnect?: () => void
   isSyncing?: boolean
+  hasError?: boolean
 }) {
   return (
     <div className="group relative">
@@ -285,10 +291,13 @@ function FolderItemGrid({
         <Tooltip>
           <TooltipTrigger asChild>
             <button
-              className="w-full flex flex-col items-center gap-2 p-4 rounded-lg border border-transparent hover:bg-muted/50 hover:border-border transition-colors"
+              className={cn(
+                "w-full flex flex-col items-center gap-2 p-4 rounded-lg border border-transparent hover:bg-muted/50 hover:border-border transition-colors",
+                hasError && "border-destructive/50"
+              )}
               onClick={onClick}
             >
-              <Folder className="h-12 w-12 text-muted-foreground" />
+              <Folder className={cn("h-12 w-12 text-muted-foreground", hasError && "text-destructive")} />
               <div className="text-center w-full">
                 <p className="text-sm truncate">{name}</p>
                 <p className="text-xs text-muted-foreground">{photoCount} รูป</p>
@@ -297,10 +306,11 @@ function FolderItemGrid({
           </TooltipTrigger>
           <TooltipContent>
             <p>{name}</p>
+            {hasError && <p className="text-destructive">Token หมดอายุ - กรุณา Reconnect</p>}
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
-      {(onSync || onForceSync) && (
+      {(onSync || onForceSync || onReconnect) && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className="absolute top-2 right-2 p-1 rounded-md opacity-0 group-hover:opacity-100 hover:bg-muted transition-all">
@@ -320,6 +330,12 @@ function FolderItemGrid({
                 Force Full Sync
               </DropdownMenuItem>
             )}
+            {onReconnect && (
+              <DropdownMenuItem onClick={onReconnect}>
+                <Link2 className="h-4 w-4 mr-2" />
+                Reconnect Google
+              </DropdownMenuItem>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       )}
@@ -334,14 +350,18 @@ function FolderItemList({
   onClick,
   onSync,
   onForceSync,
+  onReconnect,
   isSyncing,
+  hasError,
 }: {
   name: string
   photoCount: number
   onClick: () => void
   onSync?: () => void
   onForceSync?: () => void
+  onReconnect?: () => void
   isSyncing?: boolean
+  hasError?: boolean
 }) {
   return (
     <div className="group flex items-center gap-1">
@@ -349,20 +369,24 @@ function FolderItemList({
         <Tooltip>
           <TooltipTrigger asChild>
             <button
-              className="flex-1 flex items-center gap-3 px-2 py-1.5 rounded-md hover:bg-muted/50 transition-colors text-left"
+              className={cn(
+                "flex-1 flex items-center gap-3 px-2 py-1.5 rounded-md hover:bg-muted/50 transition-colors text-left",
+                hasError && "bg-destructive/10"
+              )}
               onClick={onClick}
             >
-              <Folder className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+              <Folder className={cn("h-5 w-5 text-muted-foreground flex-shrink-0", hasError && "text-destructive")} />
               <span className="flex-1 text-sm truncate">{name}</span>
               <span className="text-xs text-muted-foreground flex-shrink-0">{photoCount} รูป</span>
             </button>
           </TooltipTrigger>
           <TooltipContent>
             <p>{name}</p>
+            {hasError && <p className="text-destructive">Token หมดอายุ - กรุณา Reconnect</p>}
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
-      {(onSync || onForceSync) && (
+      {(onSync || onForceSync || onReconnect) && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className="p-1 rounded-md opacity-0 group-hover:opacity-100 hover:bg-muted transition-all">
@@ -380,6 +404,12 @@ function FolderItemList({
               <DropdownMenuItem onClick={onForceSync} disabled={isSyncing}>
                 <RotateCcw className="h-4 w-4 mr-2" />
                 Force Full Sync
+              </DropdownMenuItem>
+            )}
+            {onReconnect && (
+              <DropdownMenuItem onClick={onReconnect}>
+                <Link2 className="h-4 w-4 mr-2" />
+                Reconnect Google
               </DropdownMenuItem>
             )}
           </DropdownMenuContent>
@@ -485,6 +515,7 @@ export default function GalleryPage() {
   const triggerSyncMutation = useTriggerFolderSync()
   const retryFailedMutation = useRetryFailedPhotos()
   const downloadMutation = useDownloadPhotos()
+  const reconnectMutation = useReconnectFolder()
 
   // Save view mode preference
   useEffect(() => {
@@ -783,7 +814,9 @@ export default function GalleryPage() {
                 onClick={() => handleFolderSelect(folder.id)}
                 onSync={() => triggerSyncMutation.mutate({ folderId: folder.id })}
                 onForceSync={() => triggerSyncMutation.mutate({ folderId: folder.id, force: true })}
+                onReconnect={() => reconnectMutation.mutate(folder.id)}
                 isSyncing={syncProgressMap[folder.id] !== undefined || triggerSyncMutation.isPending}
+                hasError={folder.sync_status === 'failed'}
               />
             ))}
           </div>
@@ -797,7 +830,9 @@ export default function GalleryPage() {
                 onClick={() => handleFolderSelect(folder.id)}
                 onSync={() => triggerSyncMutation.mutate({ folderId: folder.id })}
                 onForceSync={() => triggerSyncMutation.mutate({ folderId: folder.id, force: true })}
+                onReconnect={() => reconnectMutation.mutate(folder.id)}
                 isSyncing={syncProgressMap[folder.id] !== undefined || triggerSyncMutation.isPending}
+                hasError={folder.sync_status === 'failed'}
               />
             ))}
           </div>
