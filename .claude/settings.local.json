@@ -70,7 +70,8 @@
       "Bash(timeout:*)",
       "WebFetch(domain:raw.githubusercontent.com)",
       "WebFetch(domain:api.dangku.online)",
-      "WebFetch(domain:ku-directory-vite.wti9as.easypanel.host)"
+      "WebFetch(domain:ku-directory-vite.wti9as.easypanel.host)",
+      "WebFetch(domain:ku-directory-api.wti9as.easypanel.host)"
     ]
   }
 }

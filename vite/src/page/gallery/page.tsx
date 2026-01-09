@@ -362,6 +362,11 @@ export default function GalleryPage() {
     const rootName = folder.drive_folder_name
     const currentPrefix = currentPath || rootName
 
+    // DEBUG: Log children paths
+    console.log('[Gallery Debug] rootName:', rootName)
+    console.log('[Gallery Debug] currentPrefix:', currentPrefix)
+    console.log('[Gallery Debug] children:', folder.children)
+
     // Group by first segment after current prefix
     const folderMap = new Map<string, ComputedSubfolder>()
 
