@@ -86,21 +86,21 @@ function getWebhookStatusInfo(status: SharedFolder['webhook_status'], expiry: st
         icon: Radio,
         label: 'Webhook ทำงานปกติ',
         description: expiryText,
-        className: 'text-green-600',
+        className: 'text-foreground',
       }
     case 'expiring':
       return {
         icon: Clock,
         label: 'Webhook ใกล้หมดอายุ',
         description: expiryText,
-        className: 'text-yellow-600',
+        className: 'text-muted-foreground',
       }
     case 'expired':
       return {
         icon: AlertTriangle,
         label: 'Webhook หมดอายุ',
         description: 'รอ auto-renewal',
-        className: 'text-red-600',
+        className: 'text-destructive',
       }
     case 'inactive':
     default:
@@ -125,14 +125,14 @@ function SyncStatusBadge({ status }: { status: string }) {
       )
     case 'completed':
       return (
-        <Badge variant="outline" className="gap-1 text-green-600 border-green-600/30">
+        <Badge variant="outline" className="gap-1">
           <CheckCircle2 className="h-3 w-3" />
           Sync แล้ว
         </Badge>
       )
     case 'failed':
       return (
-        <Badge variant="outline" className="gap-1 text-red-600 border-red-600/30">
+        <Badge variant="destructive" className="gap-1">
           <XCircle className="h-3 w-3" />
           Sync ล้มเหลว
         </Badge>
@@ -342,9 +342,7 @@ export default function SettingsPage() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-950">
-                  <Cloud className="h-5 w-5 text-blue-600" />
-                </div>
+                <Cloud className="h-5 w-5 text-muted-foreground" />
                 <div>
                   <CardTitle className="text-lg">Google Drive</CardTitle>
                   <CardDescription>เชื่อมต่อและ Sync รูปภาพจาก Google Drive</CardDescription>
@@ -353,7 +351,7 @@ export default function SettingsPage() {
               {statusLoading ? (
                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
               ) : isConnected ? (
-                <Badge className="bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300">
+                <Badge variant="outline">
                   <CheckCircle2 className="h-3 w-3 mr-1" />
                   เชื่อมต่อแล้ว
                 </Badge>
@@ -393,9 +391,7 @@ export default function SettingsPage() {
                           {/* Folder Header */}
                           <div className="flex items-start justify-between gap-4">
                             <div className="flex items-center gap-3 min-w-0">
-                              <div className="p-2 rounded-lg bg-yellow-50 dark:bg-yellow-950">
-                                <Folder className="h-4 w-4 text-yellow-600" />
-                              </div>
+                              <Folder className="h-4 w-4 text-muted-foreground" />
                               <div className="min-w-0">
                                 <p className="font-medium truncate">{folder.drive_folder_name}</p>
                                 <p className="text-xs text-muted-foreground">{folder.photo_count} รูปภาพ</p>
@@ -502,9 +498,7 @@ export default function SettingsPage() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-purple-50 dark:bg-purple-950">
-                  <Sparkles className="h-5 w-5 text-purple-600" />
-                </div>
+                <Sparkles className="h-5 w-5 text-muted-foreground" />
                 <div>
                   <CardTitle className="text-lg">Gemini AI</CardTitle>
                   <CardDescription>ตั้งค่า API สำหรับฟีเจอร์เขียนข่าว AI</CardDescription>
@@ -513,7 +507,7 @@ export default function SettingsPage() {
               {profileLoading ? (
                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
               ) : hasGeminiKey ? (
-                <Badge className="bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300">
+                <Badge variant="outline">
                   <CheckCircle2 className="h-3 w-3 mr-1" />
                   ตั้งค่าแล้ว
                 </Badge>
