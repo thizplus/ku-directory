@@ -137,7 +137,7 @@ function PhotoCardGrid({
       <PhotoView src={fullSizeUrl}>
         <div className={cn(
           "relative aspect-square bg-muted rounded-lg overflow-hidden cursor-pointer transition-all",
-          isSelected && "ring-2 ring-primary"
+          isSelected && "ring-2 ring-green-500"
         )}>
           {imageError || !token ? (
             <div className="absolute inset-0 flex items-center justify-center">
@@ -173,10 +173,10 @@ function PhotoCardGrid({
         }}
       >
         <div className={cn(
-          "h-5 w-5 rounded border flex items-center justify-center transition-all shadow-sm",
+          "h-5 w-5 rounded border-2 flex items-center justify-center transition-all shadow-sm",
           isSelected
-            ? "bg-primary border-primary text-white"
-            : "bg-white/90 border-gray-300 hover:border-primary hover:bg-white"
+            ? "bg-green-500 border-green-500 text-white"
+            : "bg-white border-gray-400 hover:border-green-500"
         )}>
           {isSelected && <Check className="h-3.5 w-3.5" strokeWidth={3} />}
         </div>
@@ -218,10 +218,10 @@ function PhotoCardList({
         }}
       >
         <div className={cn(
-          "h-4 w-4 rounded border flex items-center justify-center transition-all",
+          "h-4 w-4 rounded border-2 flex items-center justify-center transition-all",
           isSelected
-            ? "bg-primary border-primary text-white"
-            : "border-muted-foreground/30 hover:border-primary"
+            ? "bg-green-500 border-green-500 text-white"
+            : "border-gray-400 hover:border-green-500"
         )}>
           {isSelected && <Check className="h-3 w-3" strokeWidth={3} />}
         </div>
@@ -949,8 +949,8 @@ export default function GalleryPage() {
                     className="flex items-center gap-1.5 hover:text-foreground transition-colors"
                   >
                     <div className={cn(
-                      "h-3.5 w-3.5 rounded border flex items-center justify-center",
-                      allSelected ? "bg-primary border-primary text-white" : "border-muted-foreground/30"
+                      "h-3.5 w-3.5 rounded border-2 flex items-center justify-center",
+                      allSelected ? "bg-green-500 border-green-500 text-white" : "border-gray-400"
                     )}>
                       {allSelected && <Check className="h-2.5 w-2.5" strokeWidth={3} />}
                     </div>
@@ -958,7 +958,7 @@ export default function GalleryPage() {
                   </button>
                 )}
                 {someSelected && (
-                  <span className="text-primary">{selectedPhotos.size} รายการ</span>
+                  <span className="text-green-600 dark:text-green-400">{selectedPhotos.size} รายการ</span>
                 )}
               </div>
               <span>
