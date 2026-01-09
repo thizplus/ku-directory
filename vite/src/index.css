@@ -37,6 +37,9 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+  --theme-toggle-bg: var(--muted);
+  --theme-toggle-thumb: var(--background);
+  --theme-toggle-icon: var(--foreground);
 }
 
 .dark {
@@ -71,6 +74,9 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+  --theme-toggle-bg: var(--muted);
+  --theme-toggle-thumb: var(--foreground);
+  --theme-toggle-icon: var(--background);
 }
 
 
@@ -131,5 +137,17 @@
 @layer base {
   body {
     font-family: "Google Sans", "Noto Sans Thai", system-ui, sans-serif;
+  }
+}
+
+@layer components {
+  .theme-toggle {
+    background-color: var(--theme-toggle-bg);
+  }
+  .theme-toggle-thumb {
+    background-color: var(--theme-toggle-thumb);
+  }
+  .theme-toggle-icon {
+    color: var(--theme-toggle-icon);
   }
 }

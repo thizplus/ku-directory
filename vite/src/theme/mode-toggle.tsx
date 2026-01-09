@@ -6,41 +6,46 @@ export function ModeToggle() {
   const { theme, setTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
 
-  // ตรวจสอบว่า component ถูก mount แล้วเพื่อป้องกัน hydration error
   useEffect(() => {
     setMounted(true)
   }, [])
 
-  // สลับระหว่าง light และ dark mode
+  const isDark = theme === "dark"
+
   const toggleTheme = () => {
-    if (theme === "dark") {
-      setTheme("light")
-    } else {
-      setTheme("dark")
-    }
+    setTheme(isDark ? "light" : "dark")
   }
 
-  // ถ้ายังไม่ mount ให้แสดง placeholder เพื่อป้องกัน layout shift
   if (!mounted) {
-    return (
-      <button 
-        className="ml-auto w-8 h-8 rounded-full bg-transparent border border-border flex items-center justify-center opacity-0"
-        aria-label="เปลี่ยนธีม"
-      />
-    )
+    return <div className="ml-auto h-7 w-14 rounded-full bg-muted opacity-0" />
   }
 
   return (
     <button
       onClick={toggleTheme}
-      className="ml-auto w-8 h-8 flex items-center justify-center border border-border rounded-full hover:bg-muted/50 text-muted-foreground"
+      className="theme-toggle ml-auto relative h-7 w-14 rounded-full p-1 transition-colors duration-300 ease-in-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
       aria-label="เปลี่ยนธีม"
     >
-      {theme === "dark" ? (
-        <Moon size={20} className="h-5 w-5" />
-      ) : (
-        <Sun size={20} className="h-5 w-5" />
-      )}
+      {/* Track icons */}
+      <div className="absolute inset-1 flex items-center justify-between px-1">
+        <Sun className={`h-3.5 w-3.5 text-foreground transition-opacity duration-300 ${isDark ? 'opacity-30' : 'opacity-0'}`} />
+        <Moon className={`h-3.5 w-3.5 text-foreground transition-opacity duration-300 ${isDark ? 'opacity-0' : 'opacity-30'}`} />
+      </div>
+
+      {/* Sliding thumb */}
+      <div
+        className={`
+          theme-toggle-thumb relative z-10 flex h-5 w-5 items-center justify-center rounded-full shadow-sm
+          transition-transform duration-300 ease-in-out
+          ${isDark ? 'translate-x-7' : 'translate-x-0'}
+        `}
+      >
+        {isDark ? (
+          <Moon className="theme-toggle-icon h-3 w-3" />
+        ) : (
+          <Sun className="theme-toggle-icon h-3 w-3" />
+        )}
+      </div>
     </button>
   )
 }
