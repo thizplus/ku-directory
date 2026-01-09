@@ -477,6 +477,64 @@ func (h *SharedFolderHandler) RegisterWebhook(c *fiber.Ctx) error {
 	})
 }
 
+// ReconnectFolder updates a folder's Google tokens with the user's current tokens
+// @Summary Reconnect Google Drive to folder
+// @Tags Folders
+// @Security BearerAuth
+// @Param id path string true "Folder ID"
+// @Success 200
+// @Router /folders/{id}/reconnect [post]
+func (h *SharedFolderHandler) ReconnectFolder(c *fiber.Ctx) error {
+	userCtx, err := utils.GetUserFromContext(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"success": false,
+			"error":   "Unauthorized",
+		})
+	}
+
+	folderID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"success": false,
+			"error":   "Invalid folder ID",
+		})
+	}
+
+	// Get user's current Google tokens
+	user, err := h.userRepo.GetByID(c.Context(), userCtx.ID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"success": false,
+			"error":   "Failed to get user",
+		})
+	}
+
+	if user.DriveRefreshToken == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"success": false,
+			"error":   "Google Drive not connected. Please reconnect your Google account first.",
+		})
+	}
+
+	// Update folder tokens
+	expiry := user.DriveTokenExpiry
+	if err := h.sharedFolderRepo.UpdateTokens(c.Context(), folderID, user.DriveAccessToken, user.DriveRefreshToken, expiry, userCtx.ID); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"success": false,
+			"error":   "Failed to update folder tokens: " + err.Error(),
+		})
+	}
+
+	// Try to register webhook with new tokens
+	_ = h.sharedFolderService.RegisterWebhook(c.Context(), userCtx.ID, folderID)
+
+	return c.JSON(fiber.Map{
+		"success": true,
+		"message": "Folder reconnected successfully",
+	})
+}
+
 // GetSubFolders returns distinct sub-folder paths within a shared folder
 // @Summary Get sub-folders in a shared folder
 // @Tags Folders

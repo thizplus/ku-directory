@@ -259,11 +259,22 @@ func (s *SharedFolderServiceImpl) AddFolder(ctx context.Context, userID uuid.UUI
 			return nil, fmt.Errorf("failed to check user access: %w", err)
 		}
 		if hasAccess {
-			logger.Drive("user_already_has_access", "User already has access to folder", map[string]interface{}{
+			logger.Drive("user_already_has_access", "User already has access to folder, updating tokens", map[string]interface{}{
 				"user_id":   userID.String(),
 				"folder_id": existingFolder.ID.String(),
 			})
-			return existingFolder, nil // Already has access
+			// Update folder tokens with user's current valid tokens (in case folder's tokens are expired)
+			if err := s.sharedFolderRepo.UpdateTokens(ctx, existingFolder.ID, accessToken, refreshToken, &tokenInfo.Expiry, userID); err != nil {
+				logger.DriveError("update_folder_tokens_failed", "Failed to update folder tokens", err, map[string]interface{}{
+					"folder_id": existingFolder.ID.String(),
+				})
+				// Don't fail - just log the error
+			} else {
+				logger.Drive("folder_tokens_updated", "Folder tokens updated successfully", map[string]interface{}{
+					"folder_id": existingFolder.ID.String(),
+				})
+			}
+			return existingFolder, nil
 		}
 
 		// Add user access to existing folder

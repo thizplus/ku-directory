@@ -24,6 +24,7 @@ func SetupSharedFolderRoutes(api fiber.Router, h *handlers.Handlers) {
 	// Folder operations
 	folders.Post("/:id/sync", h.SharedFolder.TriggerSync)
 	folders.Post("/:id/webhook", h.SharedFolder.RegisterWebhook)
+	folders.Post("/:id/reconnect", h.SharedFolder.ReconnectFolder)
 	folders.Get("/:id/photos", h.SharedFolder.GetPhotos)
 	folders.Get("/:id/subfolders", h.SharedFolder.GetSubFolders)
 }
