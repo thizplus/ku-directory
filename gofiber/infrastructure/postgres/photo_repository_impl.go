@@ -240,6 +240,7 @@ func (r *PhotoRepositoryImpl) SetTrashedByDriveFileID(ctx context.Context, drive
 }
 
 // SetTrashedByDriveFolderID sets the trashed status for all photos in a folder
+// Only updates photos that actually need to change state (where is_trashed != target state)
 func (r *PhotoRepositoryImpl) SetTrashedByDriveFolderID(ctx context.Context, driveFolderID string, isTrashed bool) (int64, error) {
 	updates := map[string]interface{}{
 		"is_trashed": isTrashed,
@@ -253,6 +254,7 @@ func (r *PhotoRepositoryImpl) SetTrashedByDriveFolderID(ctx context.Context, dri
 	}
 	result := r.db.WithContext(ctx).Model(&models.Photo{}).
 		Where("drive_folder_id = ?", driveFolderID).
+		Where("is_trashed = ?", !isTrashed). // Only update photos that need state change
 		Updates(updates)
 	return result.RowsAffected, result.Error
 }
