@@ -268,31 +268,62 @@ function FolderItemGrid({
   name,
   photoCount,
   onClick,
+  onSync,
+  onForceSync,
+  isSyncing,
 }: {
   name: string
   photoCount: number
   onClick: () => void
+  onSync?: () => void
+  onForceSync?: () => void
+  isSyncing?: boolean
 }) {
   return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button
-            className="w-full flex flex-col items-center gap-2 p-4 rounded-lg border border-transparent hover:bg-muted/50 hover:border-border transition-colors"
-            onClick={onClick}
-          >
-            <Folder className="h-12 w-12 text-muted-foreground" />
-            <div className="text-center w-full">
-              <p className="text-sm truncate">{name}</p>
-              <p className="text-xs text-muted-foreground">{photoCount} รูป</p>
-            </div>
-          </button>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p>{name}</p>
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+    <div className="group relative">
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              className="w-full flex flex-col items-center gap-2 p-4 rounded-lg border border-transparent hover:bg-muted/50 hover:border-border transition-colors"
+              onClick={onClick}
+            >
+              <Folder className="h-12 w-12 text-muted-foreground" />
+              <div className="text-center w-full">
+                <p className="text-sm truncate">{name}</p>
+                <p className="text-xs text-muted-foreground">{photoCount} รูป</p>
+              </div>
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>{name}</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+      {(onSync || onForceSync) && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button className="absolute top-2 right-2 p-1 rounded-md opacity-0 group-hover:opacity-100 hover:bg-muted transition-all">
+              <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {onSync && (
+              <DropdownMenuItem onClick={onSync} disabled={isSyncing}>
+                <RefreshCw className={cn("h-4 w-4 mr-2", isSyncing && "animate-spin")} />
+                Sync
+              </DropdownMenuItem>
+            )}
+            {onForceSync && (
+              <DropdownMenuItem onClick={onForceSync} disabled={isSyncing}>
+                <RotateCcw className="h-4 w-4 mr-2" />
+                Force Full Sync
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+    </div>
   )
 }
 
@@ -301,29 +332,60 @@ function FolderItemList({
   name,
   photoCount,
   onClick,
+  onSync,
+  onForceSync,
+  isSyncing,
 }: {
   name: string
   photoCount: number
   onClick: () => void
+  onSync?: () => void
+  onForceSync?: () => void
+  isSyncing?: boolean
 }) {
   return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button
-            className="w-full flex items-center gap-3 px-2 py-1.5 rounded-md hover:bg-muted/50 transition-colors text-left"
-            onClick={onClick}
-          >
-            <Folder className="h-5 w-5 text-muted-foreground flex-shrink-0" />
-            <span className="flex-1 text-sm truncate">{name}</span>
-            <span className="text-xs text-muted-foreground flex-shrink-0">{photoCount} รูป</span>
-          </button>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p>{name}</p>
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+    <div className="group flex items-center gap-1">
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              className="flex-1 flex items-center gap-3 px-2 py-1.5 rounded-md hover:bg-muted/50 transition-colors text-left"
+              onClick={onClick}
+            >
+              <Folder className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+              <span className="flex-1 text-sm truncate">{name}</span>
+              <span className="text-xs text-muted-foreground flex-shrink-0">{photoCount} รูป</span>
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>{name}</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+      {(onSync || onForceSync) && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button className="p-1 rounded-md opacity-0 group-hover:opacity-100 hover:bg-muted transition-all">
+              <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {onSync && (
+              <DropdownMenuItem onClick={onSync} disabled={isSyncing}>
+                <RefreshCw className={cn("h-4 w-4 mr-2", isSyncing && "animate-spin")} />
+                Sync
+              </DropdownMenuItem>
+            )}
+            {onForceSync && (
+              <DropdownMenuItem onClick={onForceSync} disabled={isSyncing}>
+                <RotateCcw className="h-4 w-4 mr-2" />
+                Force Full Sync
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+    </div>
   )
 }
 
@@ -708,6 +770,9 @@ export default function GalleryPage() {
                 name={folder.drive_folder_name}
                 photoCount={folder.photo_count}
                 onClick={() => handleFolderSelect(folder.id)}
+                onSync={() => triggerSyncMutation.mutate({ folderId: folder.id })}
+                onForceSync={() => triggerSyncMutation.mutate({ folderId: folder.id, force: true })}
+                isSyncing={syncProgressMap[folder.id] !== undefined || triggerSyncMutation.isPending}
               />
             ))}
           </div>
@@ -719,6 +784,9 @@ export default function GalleryPage() {
                 name={folder.drive_folder_name}
                 photoCount={folder.photo_count}
                 onClick={() => handleFolderSelect(folder.id)}
+                onSync={() => triggerSyncMutation.mutate({ folderId: folder.id })}
+                onForceSync={() => triggerSyncMutation.mutate({ folderId: folder.id, force: true })}
+                isSyncing={syncProgressMap[folder.id] !== undefined || triggerSyncMutation.isPending}
               />
             ))}
           </div>
