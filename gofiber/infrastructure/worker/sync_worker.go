@@ -610,9 +610,13 @@ func (w *SyncWorker) processIncrementalSync(ctx context.Context, job models.Sync
 
 			// Check if this folder is within our root folder (for rename or restore handling)
 			if w.isWithinRootFolder(ctx, srv, file.Id, folder.DriveFolderID) || file.Id == folder.DriveFolderID {
+				// Track if this was a restore operation
+				wasRestored := false
+
 				// Restore: If folder was restored from trash, unmark photos
 				restoredCount, _ := w.photoRepo.SetTrashedByDriveFolderID(ctx, file.Id, false)
 				if restoredCount > 0 {
+					wasRestored = true
 					totalUpdated += int(restoredCount)
 					logger.Sync("folder_restored", "Restored photos from trash (folder restored)", map[string]interface{}{
 						"job_id":          jobID.String(),
@@ -631,6 +635,7 @@ func (w *SyncWorker) processIncrementalSync(ctx context.Context, job models.Sync
 							TotalRestored: int(restoredCount),
 						}, change)
 				}
+
 				// Get the new folder path
 				newFolderPath, err := w.driveClient.GetFolderPath(ctx, srv, file.Id, folder.DriveFolderID)
 				if err == nil && newFolderPath != "" {
@@ -645,16 +650,19 @@ func (w *SyncWorker) processIncrementalSync(ctx context.Context, job models.Sync
 							"photo_count":     updatedCount,
 						})
 
-						// Log activity: folder renamed
-						w.logActivity(ctx, folder.ID, models.ActivityFolderRenamed,
-							fmt.Sprintf("โฟลเดอร์เปลี่ยนชื่อ/ย้าย เป็น %s (รูปภาพ %d รูปถูกอัพเดท)", newFolderPath, updatedCount),
-							&models.ActivityDetails{
-								JobID:         jobID.String(),
-								FolderName:    file.Name,
-								FolderPath:    newFolderPath,
-								DriveFolderID: file.Id,
-								TotalUpdated:  int(updatedCount),
-							}, change)
+						// Only log "folder renamed" if this was NOT a restore operation
+						// (restore already implies path update, no need to log twice)
+						if !wasRestored {
+							w.logActivity(ctx, folder.ID, models.ActivityFolderRenamed,
+								fmt.Sprintf("โฟลเดอร์เปลี่ยนชื่อ/ย้าย เป็น %s (รูปภาพ %d รูปถูกอัพเดท)", newFolderPath, updatedCount),
+								&models.ActivityDetails{
+									JobID:         jobID.String(),
+									FolderName:    file.Name,
+									FolderPath:    newFolderPath,
+									DriveFolderID: file.Id,
+									TotalUpdated:  int(updatedCount),
+								}, change)
+						}
 					}
 				}
 			}
