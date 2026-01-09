@@ -76,6 +76,11 @@ func (r *SharedFolderRepositoryImpl) Update(ctx context.Context, id uuid.UUID, f
 	return r.db.WithContext(ctx).Where("id = ?", id).Updates(folder).Error
 }
 
+// UpdateMetadata updates folder metadata using a map (ensures all fields are updated)
+func (r *SharedFolderRepositoryImpl) UpdateMetadata(ctx context.Context, id uuid.UUID, updates map[string]interface{}) error {
+	return r.db.WithContext(ctx).Model(&models.SharedFolder{}).Where("id = ?", id).Updates(updates).Error
+}
+
 // UpdateSyncStatus updates the sync status of a folder
 func (r *SharedFolderRepositoryImpl) UpdateSyncStatus(ctx context.Context, id uuid.UUID, status models.SyncStatus, lastError string) error {
 	updates := map[string]interface{}{

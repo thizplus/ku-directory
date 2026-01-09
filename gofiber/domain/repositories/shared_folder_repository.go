@@ -17,6 +17,7 @@ type SharedFolderRepository interface {
 	GetAll(ctx context.Context) ([]models.SharedFolder, error)
 	GetAllNeedingSync(ctx context.Context) ([]models.SharedFolder, error)
 	Update(ctx context.Context, id uuid.UUID, folder *models.SharedFolder) error
+	UpdateMetadata(ctx context.Context, id uuid.UUID, updates map[string]interface{}) error
 	UpdateSyncStatus(ctx context.Context, id uuid.UUID, status models.SyncStatus, lastError string) error
 	UpdateTokens(ctx context.Context, id uuid.UUID, accessToken, refreshToken string, expiry *time.Time, ownerID uuid.UUID) error
 	ResetSyncState(ctx context.Context, id uuid.UUID) error // Reset PageToken and LastSyncedAt for force full sync

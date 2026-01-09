@@ -344,13 +344,10 @@ func (w *SyncWorker) updateFolderMetadata(ctx context.Context, folder *models.Sh
 	}
 
 	// Check if name or description changed
-	needsUpdate := false
-	updates := &models.SharedFolder{}
+	nameChanged := folderMeta.Name != folder.DriveFolderName
+	descChanged := folderMeta.Description != folder.Description
 
-	if folderMeta.Name != folder.DriveFolderName {
-		updates.DriveFolderName = folderMeta.Name
-		updates.DriveFolderPath = folderMeta.Name
-		needsUpdate = true
+	if nameChanged {
 		logger.Sync("folder_name_changed", "Folder name changed", map[string]interface{}{
 			"folder_id": folder.ID.String(),
 			"old_name":  folder.DriveFolderName,
@@ -358,9 +355,7 @@ func (w *SyncWorker) updateFolderMetadata(ctx context.Context, folder *models.Sh
 		})
 	}
 
-	if folderMeta.Description != folder.Description {
-		updates.Description = folderMeta.Description
-		needsUpdate = true
+	if descChanged {
 		logger.Sync("folder_description_changed", "Folder description changed", map[string]interface{}{
 			"folder_id":       folder.ID.String(),
 			"old_description": truncateString(folder.Description, 100),
@@ -368,23 +363,38 @@ func (w *SyncWorker) updateFolderMetadata(ctx context.Context, folder *models.Sh
 		})
 	}
 
-	// Update folder if needed
-	if needsUpdate {
-		if err := w.sharedFolderRepo.Update(ctx, folder.ID, updates); err != nil {
+	// Update folder if needed - use map to ensure GORM updates all fields
+	if nameChanged || descChanged {
+		updates := map[string]interface{}{
+			"updated_at": time.Now(),
+		}
+		if nameChanged {
+			updates["drive_folder_name"] = folderMeta.Name
+			updates["drive_folder_path"] = folderMeta.Name
+		}
+		if descChanged {
+			updates["description"] = folderMeta.Description
+		}
+
+		if err := w.sharedFolderRepo.UpdateMetadata(ctx, folder.ID, updates); err != nil {
 			logger.SyncError("update_folder_metadata_failed", "Failed to update folder metadata", err, map[string]interface{}{
 				"folder_id": folder.ID.String(),
+				"error":     err.Error(),
 			})
 		} else {
 			// Update local folder object
-			if updates.DriveFolderName != "" {
-				folder.DriveFolderName = updates.DriveFolderName
-				folder.DriveFolderPath = updates.DriveFolderPath
+			if nameChanged {
+				folder.DriveFolderName = folderMeta.Name
+				folder.DriveFolderPath = folderMeta.Name
 			}
-			if updates.Description != "" || folderMeta.Description == "" {
+			if descChanged {
 				folder.Description = folderMeta.Description
 			}
-			logger.Sync("folder_metadata_updated", "Folder metadata updated", map[string]interface{}{
-				"folder_id": folder.ID.String(),
+			logger.Sync("folder_metadata_updated", "Folder metadata updated successfully", map[string]interface{}{
+				"folder_id":    folder.ID.String(),
+				"new_name":     folderMeta.Name,
+				"name_changed": nameChanged,
+				"desc_changed": descChanged,
 			})
 		}
 	}
