@@ -24,6 +24,7 @@ func SetupRoutes(app *fiber.App, h *handlers.Handlers, healthHandler *handlers.H
 	SetupNewsRoutes(api, h)
 	SetupSharedFolderRoutes(api, h)
 	SetupLogRoutes(api, h)
+	SetupActivityLogRoutes(api, h)
 
 	// Setup WebSocket routes (needs app, not api group)
 	SetupWebSocketRoutes(app)

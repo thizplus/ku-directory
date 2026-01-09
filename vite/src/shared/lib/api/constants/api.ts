@@ -63,3 +63,10 @@ export const FOLDERS_API = {
   PHOTOS: (id: string) => `/folders/${id}/photos`,
   SUBFOLDERS: (id: string) => `/folders/${id}/subfolders`,
 } as const
+
+// Activity Logs API
+export const ACTIVITY_LOGS_API = {
+  LIST: '/activity-logs',
+  RECENT: '/activity-logs/recent',
+  TYPES: '/activity-logs/types',
+} as const

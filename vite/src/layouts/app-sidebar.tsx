@@ -8,6 +8,7 @@ import {
   ScanFace,
   Newspaper,
   Settings,
+  Activity,
 } from "lucide-react"
 import { Link, useLocation } from "react-router-dom"
 
@@ -53,6 +54,11 @@ const navItems = [
 ]
 
 const settingsItems = [
+  {
+    title: "Activity Logs",
+    url: "/activity-logs",
+    icon: Activity,
+  },
   {
     title: "ตั้งค่า",
     url: "/settings",

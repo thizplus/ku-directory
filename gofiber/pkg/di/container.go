@@ -44,6 +44,7 @@ type Container struct {
 	FaceRepository         repositories.FaceRepository
 	PersonRepository       repositories.PersonRepository
 	SharedFolderRepository repositories.SharedFolderRepository
+	ActivityLogRepository  repositories.ActivityLogRepository
 
 	// Services
 	UserService         services.UserService
@@ -55,6 +56,7 @@ type Container struct {
 	FaceService         services.FaceService
 	NewsService         services.NewsService
 	SharedFolderService services.SharedFolderService
+	ActivityLogService  services.ActivityLogService
 
 	// Workers
 	SyncWorker *worker.SyncWorker
@@ -199,6 +201,7 @@ func (c *Container) initRepositories() error {
 	c.FaceRepository = postgres.NewFaceRepository(c.DB)
 	c.PersonRepository = postgres.NewPersonRepository(c.DB)
 	c.SharedFolderRepository = postgres.NewSharedFolderRepository(c.DB)
+	c.ActivityLogRepository = postgres.NewActivityLogRepository(c.DB)
 	logger.Startup("repositories_initialized", "Repositories initialized", nil)
 	return nil
 }
@@ -221,6 +224,10 @@ func (c *Container) initServices() error {
 		c.NewsService = serviceimpl.NewNewsServiceWithDrive(c.GoogleDrive, c.PhotoRepository, c.UserRepository, c.SharedFolderRepository)
 		logger.Startup("news_service_initialized", "News service initialized", nil)
 	}
+
+	// Initialize Activity Log Service
+	c.ActivityLogService = serviceimpl.NewActivityLogService(c.ActivityLogRepository)
+	logger.Startup("activity_log_service_initialized", "Activity log service initialized", nil)
 
 	// SharedFolderService will be initialized after workers (needs SyncWorker)
 
@@ -272,6 +279,7 @@ func (c *Container) initWorkers() error {
 		c.SharedFolderRepository,
 		c.PhotoRepository,
 		c.SyncJobRepository,
+		c.ActivityLogRepository,
 	)
 
 	// Start the sync worker
@@ -489,6 +497,7 @@ func (c *Container) GetHandlerServices() *handlers.Services {
 		FaceService:         c.FaceService,
 		NewsService:         c.NewsService,
 		SharedFolderService: c.SharedFolderService,
+		ActivityLogService:  c.ActivityLogService,
 	}
 }
 

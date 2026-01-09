@@ -17,6 +17,7 @@ type Services struct {
 	FaceService         services.FaceService
 	NewsService         services.NewsService
 	SharedFolderService services.SharedFolderService
+	ActivityLogService  services.ActivityLogService
 }
 
 // Repositories contains repositories needed for some handlers
@@ -38,6 +39,7 @@ type Handlers struct {
 	NewsHandler         *NewsHandler
 	SharedFolderHandler *SharedFolderHandler
 	LogHandler          *LogHandler
+	ActivityLogHandler  *ActivityLogHandler
 
 	// Short accessors for routes
 	User         *UserHandler
@@ -50,6 +52,7 @@ type Handlers struct {
 	News         *NewsHandler
 	SharedFolder *SharedFolderHandler
 	Log          *LogHandler
+	ActivityLog  *ActivityLogHandler
 }
 
 // NewHandlers creates a new instance of Handlers with all dependencies
@@ -65,6 +68,7 @@ func NewHandlers(services *Services, repos *Repositories, cfg *config.Config) *H
 	logHandler := NewLogHandler(cfg)
 
 	var sharedFolderHandler *SharedFolderHandler
+	var activityLogHandler *ActivityLogHandler
 	if services.SharedFolderService != nil && repos != nil {
 		sharedFolderHandler = NewSharedFolderHandler(
 			services.SharedFolderService,
@@ -74,6 +78,13 @@ func NewHandlers(services *Services, repos *Repositories, cfg *config.Config) *H
 		)
 		// Wire shared folder service to drive handler for webhook support
 		driveHandler.SetSharedFolderService(services.SharedFolderService)
+	}
+
+	if services.ActivityLogService != nil && repos != nil {
+		activityLogHandler = NewActivityLogHandler(
+			services.ActivityLogService,
+			repos.SharedFolderRepository,
+		)
 	}
 
 	return &Handlers{
@@ -87,6 +98,7 @@ func NewHandlers(services *Services, repos *Repositories, cfg *config.Config) *H
 		NewsHandler:         newsHandler,
 		SharedFolderHandler: sharedFolderHandler,
 		LogHandler:          logHandler,
+		ActivityLogHandler:  activityLogHandler,
 
 		// Short accessors
 		User:         userHandler,
@@ -99,5 +111,6 @@ func NewHandlers(services *Services, repos *Repositories, cfg *config.Config) *H
 		News:         newsHandler,
 		SharedFolder: sharedFolderHandler,
 		Log:          logHandler,
+		ActivityLog:  activityLogHandler,
 	}
 }

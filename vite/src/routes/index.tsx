@@ -13,6 +13,7 @@ const GalleryPage = lazy(() => import('@/page/gallery/page'));
 const FaceSearchPage = lazy(() => import('@/page/face-search/page'));
 const NewsWriterPage = lazy(() => import('@/page/news-writer/page'));
 const SettingsPage = lazy(() => import('@/page/settings/page'));
+const ActivityLogsPage = lazy(() => import('@/page/activity-logs/page'));
 
 // Layouts
 import RootLayout from '@/layouts/root-layout';
@@ -47,6 +48,7 @@ const AppRoutes = () => {
           <Route path="/face-search" element={<FaceSearchPage />} />
           <Route path="/news-writer" element={<NewsWriterPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/activity-logs" element={<ActivityLogsPage />} />
         </Route>
 
         {/* 404 route */}

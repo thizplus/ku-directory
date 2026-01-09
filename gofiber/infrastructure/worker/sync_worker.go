@@ -24,6 +24,7 @@ type SyncWorker struct {
 	sharedFolderRepo repositories.SharedFolderRepository
 	photoRepo        repositories.PhotoRepository
 	syncJobRepo      repositories.SyncJobRepository
+	activityLogRepo  repositories.ActivityLogRepository
 
 	// Worker control
 	ctx        context.Context
@@ -57,12 +58,14 @@ func NewSyncWorker(
 	sharedFolderRepo repositories.SharedFolderRepository,
 	photoRepo repositories.PhotoRepository,
 	syncJobRepo repositories.SyncJobRepository,
+	activityLogRepo repositories.ActivityLogRepository,
 ) *SyncWorker {
 	return &SyncWorker{
 		driveClient:      driveClient,
 		sharedFolderRepo: sharedFolderRepo,
 		photoRepo:        photoRepo,
 		syncJobRepo:      syncJobRepo,
+		activityLogRepo:  activityLogRepo,
 		triggerCh:        make(chan struct{}, 10), // Buffered channel for triggers
 		maxConcurrent:    2,
 		batchSize:        100,
@@ -235,6 +238,17 @@ func (w *SyncWorker) processJob(job models.SyncJob) {
 		"status":   "running",
 	})
 
+	// Log activity: sync started
+	isFirstSync := folder.LastSyncedAt == nil
+	w.logActivity(ctx, folder.ID, models.ActivitySyncStarted,
+		fmt.Sprintf("เริ่มซิงค์โฟลเดอร์ %s", folder.DriveFolderName),
+		&models.ActivityDetails{
+			JobID:         jobID.String(),
+			FolderName:    folder.DriveFolderName,
+			DriveFolderID: folder.DriveFolderID,
+			IsIncremental: !isFirstSync && folder.PageToken != "",
+		}, nil)
+
 	// Update folder sync status
 	w.sharedFolderRepo.UpdateSyncStatus(ctx, folder.ID, models.SyncStatusSyncing, "")
 
@@ -281,6 +295,15 @@ func (w *SyncWorker) processJob(job models.SyncJob) {
 				"message":    "Google Drive token หมดอายุ กรุณา Reconnect",
 			})
 
+			// Log activity: token expired
+			w.logActivity(ctx, folder.ID, models.ActivityTokenExpired,
+				fmt.Sprintf("Google Drive token หมดอายุ - โฟลเดอร์ %s", folder.DriveFolderName),
+				&models.ActivityDetails{
+					JobID:        jobID.String(),
+					FolderName:   folder.DriveFolderName,
+					ErrorMessage: errStr,
+				}, nil)
+
 			// Update folder status with error
 			w.sharedFolderRepo.UpdateSyncStatus(ctx, folder.ID, models.SyncStatusError, "Google token expired - please reconnect")
 		}
@@ -299,7 +322,6 @@ func (w *SyncWorker) processJob(job models.SyncJob) {
 
 	// Decide: Incremental sync or Full sync
 	// Use LastSyncedAt to determine if this is first sync (not PageToken, which may be set by webhook registration)
-	isFirstSync := folder.LastSyncedAt == nil
 	if !isFirstSync && folder.PageToken != "" {
 		logger.Sync("sync_mode", "Starting incremental sync", map[string]interface{}{
 			"job_id":      jobID.String(),
@@ -434,6 +456,15 @@ func (w *SyncWorker) processIncrementalSync(ctx context.Context, job models.Sync
 				"message":    "Google Drive token หมดอายุ กรุณา Reconnect",
 			})
 
+			// Log activity: token expired
+			w.logActivity(ctx, folder.ID, models.ActivityTokenExpired,
+				fmt.Sprintf("Google Drive token หมดอายุ - โฟลเดอร์ %s", folder.DriveFolderName),
+				&models.ActivityDetails{
+					JobID:        jobID.String(),
+					FolderName:   folder.DriveFolderName,
+					ErrorMessage: errStr,
+				}, nil)
+
 			// Update folder status with error and fail the job
 			w.sharedFolderRepo.UpdateSyncStatus(ctx, folder.ID, models.SyncStatusError, "Google token expired - please reconnect")
 			w.failJob(ctx, jobID, &folder.ID, fmt.Sprintf("Failed to get changes: %v", err))
@@ -517,11 +548,30 @@ func (w *SyncWorker) processIncrementalSync(ctx context.Context, job models.Sync
 				if existingPhoto != nil {
 					w.photoRepo.Delete(ctx, existingPhoto.ID)
 					totalDeleted++
+
+					// Log activity: photo permanently deleted
+					w.logActivity(ctx, folder.ID, models.ActivityPhotosDeleted,
+						fmt.Sprintf("รูปภาพ %s ถูกลบถาวร", existingPhoto.FileName),
+						&models.ActivityDetails{
+							JobID:       jobID.String(),
+							FileNames:   []string{existingPhoto.FileName},
+							DriveFileID: change.FileId,
+							Count:       1,
+						}, change)
 				}
 
 				deletedFromFolder, err := w.photoRepo.DeleteByDriveFolderID(ctx, change.FileId)
 				if err == nil && deletedFromFolder > 0 {
 					totalDeleted += int(deletedFromFolder)
+
+					// Log activity: folder permanently deleted
+					w.logActivity(ctx, folder.ID, models.ActivityFolderDeleted,
+						fmt.Sprintf("โฟลเดอร์ถูกลบถาวร (รูปภาพ %d รูปถูกลบ)", deletedFromFolder),
+						&models.ActivityDetails{
+							JobID:         jobID.String(),
+							DriveFolderID: change.FileId,
+							TotalDeleted:  int(deletedFromFolder),
+						}, change)
 				}
 			}
 			totalProcessed++
@@ -543,6 +593,16 @@ func (w *SyncWorker) processIncrementalSync(ctx context.Context, job models.Sync
 						"folder_name":     file.Name,
 						"trashed_count":   trashedCount,
 					})
+
+					// Log activity: folder trashed
+					w.logActivity(ctx, folder.ID, models.ActivityFolderTrashed,
+						fmt.Sprintf("โฟลเดอร์ %s ถูกย้ายไปถังขยะ (รูปภาพ %d รูปถูกซ่อน)", file.Name, trashedCount),
+						&models.ActivityDetails{
+							JobID:         jobID.String(),
+							FolderName:    file.Name,
+							DriveFolderID: file.Id,
+							TotalTrashed:  int(trashedCount),
+						}, change)
 				}
 				totalProcessed++
 				continue
@@ -560,6 +620,16 @@ func (w *SyncWorker) processIncrementalSync(ctx context.Context, job models.Sync
 						"folder_name":     file.Name,
 						"restored_count":  restoredCount,
 					})
+
+					// Log activity: folder restored
+					w.logActivity(ctx, folder.ID, models.ActivityFolderRestored,
+						fmt.Sprintf("โฟลเดอร์ %s ถูกกู้คืนจากถังขยะ (รูปภาพ %d รูปถูกกู้คืน)", file.Name, restoredCount),
+						&models.ActivityDetails{
+							JobID:         jobID.String(),
+							FolderName:    file.Name,
+							DriveFolderID: file.Id,
+							TotalRestored: int(restoredCount),
+						}, change)
 				}
 				// Get the new folder path
 				newFolderPath, err := w.driveClient.GetFolderPath(ctx, srv, file.Id, folder.DriveFolderID)
@@ -574,6 +644,17 @@ func (w *SyncWorker) processIncrementalSync(ctx context.Context, job models.Sync
 							"new_path":        newFolderPath,
 							"photo_count":     updatedCount,
 						})
+
+						// Log activity: folder renamed
+						w.logActivity(ctx, folder.ID, models.ActivityFolderRenamed,
+							fmt.Sprintf("โฟลเดอร์เปลี่ยนชื่อ/ย้าย เป็น %s (รูปภาพ %d รูปถูกอัพเดท)", newFolderPath, updatedCount),
+							&models.ActivityDetails{
+								JobID:         jobID.String(),
+								FolderName:    file.Name,
+								FolderPath:    newFolderPath,
+								DriveFolderID: file.Id,
+								TotalUpdated:  int(updatedCount),
+							}, change)
 					}
 				}
 			}
@@ -596,6 +677,16 @@ func (w *SyncWorker) processIncrementalSync(ctx context.Context, job models.Sync
 					"drive_file_id": file.Id,
 					"file_name":     file.Name,
 				})
+
+				// Log activity: photo trashed
+				w.logActivity(ctx, folder.ID, models.ActivityPhotosTrashed,
+					fmt.Sprintf("รูปภาพ %s ถูกย้ายไปถังขยะ", file.Name),
+					&models.ActivityDetails{
+						JobID:       jobID.String(),
+						FileNames:   []string{file.Name},
+						DriveFileID: file.Id,
+						Count:       1,
+					}, change)
 			}
 			totalProcessed++
 			continue
@@ -625,6 +716,16 @@ func (w *SyncWorker) processIncrementalSync(ctx context.Context, job models.Sync
 					"drive_file_id": file.Id,
 					"file_name":     file.Name,
 				})
+
+				// Log activity: photo restored
+				w.logActivity(ctx, folder.ID, models.ActivityPhotosRestored,
+					fmt.Sprintf("รูปภาพ %s ถูกกู้คืนจากถังขยะ", file.Name),
+					&models.ActivityDetails{
+						JobID:       jobID.String(),
+						FileNames:   []string{file.Name},
+						DriveFileID: file.Id,
+						Count:       1,
+					}, change)
 			}
 
 			existingPhoto.FileName = file.Name
@@ -671,6 +772,17 @@ func (w *SyncWorker) processIncrementalSync(ctx context.Context, job models.Sync
 					"count":    1,
 					"photoIds": []string{photo.ID.String()},
 				})
+
+				// Log activity: photo added
+				w.logActivity(ctx, folder.ID, models.ActivityPhotosAdded,
+					fmt.Sprintf("รูปภาพใหม่ %s ถูกเพิ่ม", file.Name),
+					&models.ActivityDetails{
+						JobID:       jobID.String(),
+						FileNames:   []string{file.Name},
+						DriveFileID: file.Id,
+						FolderPath:  folderPath,
+						Count:       1,
+					}, change)
 			}
 		}
 		totalProcessed++
@@ -731,6 +843,20 @@ func (w *SyncWorker) processIncrementalSync(ctx context.Context, job models.Sync
 		"deleted_files": totalDeleted,
 		"failed_files":  totalFailed,
 	})
+
+	// Log activity: sync completed
+	w.logActivity(ctx, folder.ID, models.ActivitySyncCompleted,
+		fmt.Sprintf("ซิงค์สำเร็จ - เพิ่ม %d, อัพเดท %d, ลบ %d รายการ", totalNew, totalUpdated, totalDeleted),
+		&models.ActivityDetails{
+			JobID:         jobID.String(),
+			FolderName:    folder.DriveFolderName,
+			IsIncremental: true,
+			DurationMs:    duration.Milliseconds(),
+			TotalNew:      totalNew,
+			TotalUpdated:  totalUpdated,
+			TotalDeleted:  totalDeleted,
+			TotalFailed:   totalFailed,
+		}, nil)
 }
 
 // processFullSync does a full sync of all images
@@ -799,6 +925,15 @@ func (w *SyncWorker) processFullSync(ctx context.Context, job models.SyncJob, fo
 				"folderName": folder.DriveFolderName,
 				"message":    "Google Drive token หมดอายุ กรุณา Reconnect",
 			})
+
+			// Log activity: token expired
+			w.logActivity(ctx, folder.ID, models.ActivityTokenExpired,
+				fmt.Sprintf("Google Drive token หมดอายุ - โฟลเดอร์ %s", folder.DriveFolderName),
+				&models.ActivityDetails{
+					JobID:        jobID.String(),
+					FolderName:   folder.DriveFolderName,
+					ErrorMessage: errStr,
+				}, nil)
 
 			// Update folder status with error
 			w.sharedFolderRepo.UpdateSyncStatus(ctx, folder.ID, models.SyncStatusError, "Google token expired - please reconnect")
@@ -1024,6 +1159,20 @@ func (w *SyncWorker) processFullSync(ctx context.Context, job models.SyncJob, fo
 		"deleted_files":   totalDeleted,
 		"failed_files":    totalFailed,
 	})
+
+	// Log activity: sync completed
+	w.logActivity(ctx, folder.ID, models.ActivitySyncCompleted,
+		fmt.Sprintf("ซิงค์ครั้งแรกสำเร็จ - เพิ่ม %d รูปภาพ", totalNew),
+		&models.ActivityDetails{
+			JobID:         jobID.String(),
+			FolderName:    folder.DriveFolderName,
+			IsIncremental: false,
+			DurationMs:    duration.Milliseconds(),
+			TotalNew:      totalNew,
+			TotalUpdated:  totalUpdated,
+			TotalDeleted:  totalDeleted,
+			TotalFailed:   totalFailed,
+		}, nil)
 }
 
 // broadcastToFolderUsers broadcasts a message to all users with access to a folder
@@ -1082,6 +1231,14 @@ func (w *SyncWorker) failJob(ctx context.Context, jobID uuid.UUID, folderID *uui
 			"status":   "failed",
 			"message":  errMsg,
 		})
+
+		// Log activity: sync failed
+		w.logActivity(ctx, *folderID, models.ActivitySyncFailed,
+			fmt.Sprintf("ซิงค์ล้มเหลว: %s", errMsg),
+			&models.ActivityDetails{
+				JobID:        jobID.String(),
+				ErrorMessage: errMsg,
+			}, nil)
 	}
 }
 
@@ -1125,6 +1282,38 @@ func (w *SyncWorker) saveIncrementalProgress(ctx context.Context, jobID uuid.UUI
 // isImageMimeType checks if the mime type is an image
 func isImageMimeType(mimeType string) bool {
 	return strings.HasPrefix(mimeType, "image/")
+}
+
+// logActivity creates an activity log entry
+func (w *SyncWorker) logActivity(ctx context.Context, folderID uuid.UUID, activityType models.ActivityType, message string, details *models.ActivityDetails, rawData interface{}) {
+	var detailsJSON, rawDataJSON string
+
+	if details != nil {
+		if data, err := json.Marshal(details); err == nil {
+			detailsJSON = string(data)
+		}
+	}
+
+	if rawData != nil {
+		if data, err := json.Marshal(rawData); err == nil {
+			rawDataJSON = string(data)
+		}
+	}
+
+	log := &models.ActivityLog{
+		SharedFolderID: folderID,
+		ActivityType:   activityType,
+		Message:        message,
+		Details:        detailsJSON,
+		RawData:        rawDataJSON,
+	}
+
+	if err := w.activityLogRepo.Create(ctx, log); err != nil {
+		logger.SyncError("activity_log_create_failed", "Failed to create activity log", err, map[string]interface{}{
+			"folder_id":     folderID.String(),
+			"activity_type": string(activityType),
+		})
+	}
 }
 
 // isWithinRootFolder checks if a folder is within the root folder
