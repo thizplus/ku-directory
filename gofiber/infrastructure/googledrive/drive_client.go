@@ -454,8 +454,13 @@ func (c *DriveClient) GetFileDownloadURL(ctx context.Context, srv *drive.Service
 }
 
 // GetFolderPath gets the full path of a folder
-func (c *DriveClient) GetFolderPath(ctx context.Context, srv *drive.Service, folderID string) (string, error) {
+// If stopAtFolderID is provided, it will stop traversing when it reaches that folder (inclusive)
+func (c *DriveClient) GetFolderPath(ctx context.Context, srv *drive.Service, folderID string, stopAtFolderID ...string) (string, error) {
 	var pathParts []string
+	var stopID string
+	if len(stopAtFolderID) > 0 {
+		stopID = stopAtFolderID[0]
+	}
 
 	currentID := folderID
 	for currentID != "" {
@@ -465,6 +470,11 @@ func (c *DriveClient) GetFolderPath(ctx context.Context, srv *drive.Service, fol
 		}
 
 		pathParts = append([]string{folder.Name}, pathParts...)
+
+		// Stop if we've reached the root shared folder
+		if stopID != "" && currentID == stopID {
+			break
+		}
 
 		if len(folder.Parents) > 0 {
 			currentID = folder.Parents[0]

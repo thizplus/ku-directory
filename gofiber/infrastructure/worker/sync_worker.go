@@ -503,7 +503,7 @@ func (w *SyncWorker) processIncrementalSync(ctx context.Context, job models.Sync
 
 		existingPhoto, _ := w.photoRepo.GetByDriveFileID(ctx, file.Id)
 		if existingPhoto != nil {
-			folderPath, _ := w.driveClient.GetFolderPath(ctx, srv, parentID)
+			folderPath, _ := w.driveClient.GetFolderPath(ctx, srv, parentID, folder.DriveFolderID)
 			modifiedTime, _ := time.Parse(time.RFC3339, file.ModifiedTime)
 
 			existingPhoto.FileName = file.Name
@@ -516,7 +516,7 @@ func (w *SyncWorker) processIncrementalSync(ctx context.Context, job models.Sync
 			w.photoRepo.Update(ctx, existingPhoto.ID, existingPhoto)
 			totalUpdated++
 		} else {
-			folderPath, _ := w.driveClient.GetFolderPath(ctx, srv, parentID)
+			folderPath, _ := w.driveClient.GetFolderPath(ctx, srv, parentID, folder.DriveFolderID)
 			createdTime, _ := time.Parse(time.RFC3339, file.CreatedTime)
 			modifiedTime, _ := time.Parse(time.RFC3339, file.ModifiedTime)
 
@@ -714,7 +714,7 @@ func (w *SyncWorker) processFullSync(ctx context.Context, job models.SyncJob, fo
 		if folderPathMap != nil {
 			folderPath = folderPathMap[file.ParentID]
 		} else {
-			folderPath, _ = w.driveClient.GetFolderPath(ctx, srv, file.ParentID)
+			folderPath, _ = w.driveClient.GetFolderPath(ctx, srv, file.ParentID, folder.DriveFolderID)
 		}
 
 		existingPhoto, _ := w.photoRepo.GetByDriveFileID(ctx, file.ID)
