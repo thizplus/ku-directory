@@ -530,26 +530,12 @@ func (w *SyncWorker) processIncrementalSync(ctx context.Context, job models.Sync
 
 		file := change.File
 
-		// Handle folder changes (trashed or renamed folders)
+		// Handle folder changes (renamed folders)
+		// Note: Trashed folders are NOT deleted here - only permanent delete (change.Removed) triggers deletion
+		// This allows users to restore from trash without losing data
 		if file.MimeType == "application/vnd.google-apps.folder" {
-			// Check if folder was trashed - delete all photos in this folder
+			// Skip trashed folders - they'll be deleted when permanently removed
 			if file.Trashed {
-				deletedFromFolder, err := w.photoRepo.DeleteByDriveFolderID(ctx, file.Id)
-				if err == nil && deletedFromFolder > 0 {
-					totalDeleted += int(deletedFromFolder)
-					logger.Sync("folder_trashed", "Deleted photos from trashed folder", map[string]interface{}{
-						"job_id":          jobID.String(),
-						"drive_folder_id": file.Id,
-						"folder_name":     file.Name,
-						"deleted_count":   deletedFromFolder,
-					})
-
-					w.broadcastToFolderUsers(ctx, folder.ID, "photos:deleted", map[string]interface{}{
-						"count":    deletedFromFolder,
-						"reason":   "folder_trashed",
-						"folderId": file.Id,
-					})
-				}
 				totalProcessed++
 				continue
 			}
@@ -581,12 +567,9 @@ func (w *SyncWorker) processIncrementalSync(ctx context.Context, job models.Sync
 			continue
 		}
 
+		// Skip trashed photos - they'll be deleted when permanently removed (change.Removed)
+		// This allows users to restore from trash without losing data
 		if file.Trashed {
-			existingPhoto, _ := w.photoRepo.GetByDriveFileID(ctx, file.Id)
-			if existingPhoto != nil {
-				w.photoRepo.Delete(ctx, existingPhoto.ID)
-				totalDeleted++
-			}
 			totalProcessed++
 			continue
 		}
