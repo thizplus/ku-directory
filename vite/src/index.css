@@ -40,6 +40,18 @@
   --theme-toggle-bg: var(--muted);
   --theme-toggle-thumb: var(--background);
   --theme-toggle-icon: var(--foreground);
+
+  /* Activity icon colors */
+  --activity-sync: oklch(0.59 0.2 255);
+  --activity-success: oklch(0.65 0.2 145);
+  --activity-error: oklch(0.63 0.24 25);
+  --activity-warning: oklch(0.75 0.18 85);
+  --activity-add: oklch(0.65 0.19 160);
+  --activity-trash: oklch(0.7 0.15 55);
+  --activity-restore: oklch(0.65 0.15 200);
+  --activity-folder: oklch(0.65 0.18 290);
+  --activity-move: oklch(0.6 0.15 230);
+  --activity-webhook: oklch(0.55 0.2 275);
 }
 
 .dark {
@@ -77,10 +89,19 @@
   --theme-toggle-bg: var(--muted);
   --theme-toggle-thumb: var(--foreground);
   --theme-toggle-icon: var(--background);
+
+  /* Activity icon colors - brighter for dark mode */
+  --activity-sync: oklch(0.7 0.18 255);
+  --activity-success: oklch(0.75 0.18 145);
+  --activity-error: oklch(0.7 0.22 25);
+  --activity-warning: oklch(0.82 0.16 85);
+  --activity-add: oklch(0.75 0.17 160);
+  --activity-trash: oklch(0.78 0.14 55);
+  --activity-restore: oklch(0.75 0.14 200);
+  --activity-folder: oklch(0.75 0.16 290);
+  --activity-move: oklch(0.7 0.14 230);
+  --activity-webhook: oklch(0.68 0.18 275);
 }
-
-
-
 
 @theme inline {
   --font-sans: "Google Sans", "Noto Sans Thai", system-ui, sans-serif;
@@ -150,4 +171,16 @@
   .theme-toggle-icon {
     color: var(--theme-toggle-icon);
   }
+
+  /* Activity icon semantic classes */
+  .activity-sync { color: var(--activity-sync); }
+  .activity-success { color: var(--activity-success); }
+  .activity-error { color: var(--activity-error); }
+  .activity-warning { color: var(--activity-warning); }
+  .activity-add { color: var(--activity-add); }
+  .activity-trash { color: var(--activity-trash); }
+  .activity-restore { color: var(--activity-restore); }
+  .activity-folder { color: var(--activity-folder); }
+  .activity-move { color: var(--activity-move); }
+  .activity-webhook { color: var(--activity-webhook); }
 }

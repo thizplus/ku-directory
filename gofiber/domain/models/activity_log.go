@@ -18,12 +18,16 @@ const (
 	ActivityPhotosAdded    ActivityType = "photos_added"
 	ActivityPhotosTrashed  ActivityType = "photos_trashed"
 	ActivityPhotosRestored ActivityType = "photos_restored"
-	ActivityPhotosDeleted  ActivityType = "photos_deleted" // Permanent delete
+	ActivityPhotosDeleted  ActivityType = "photos_deleted"  // Permanent delete
+	ActivityPhotoRenamed   ActivityType = "photo_renamed"   // Name changed
+	ActivityPhotoMoved     ActivityType = "photo_moved"     // Moved to different folder
+	ActivityPhotoUpdated   ActivityType = "photo_updated"   // Content/metadata updated
 
 	// Folder activities
 	ActivityFolderTrashed  ActivityType = "folder_trashed"
 	ActivityFolderRestored ActivityType = "folder_restored"
-	ActivityFolderRenamed  ActivityType = "folder_renamed"
+	ActivityFolderRenamed  ActivityType = "folder_renamed" // Name changed, same location
+	ActivityFolderMoved    ActivityType = "folder_moved"   // Location changed
 	ActivityFolderDeleted  ActivityType = "folder_deleted" // Permanent delete
 
 	// Webhook activities

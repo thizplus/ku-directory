@@ -42,32 +42,36 @@ import { useSharedFolders } from "@/features/folders"
 import { useActivityLogs, useActivityTypes } from "@/features/activity-logs"
 import type { ActivityLog } from "@/services/activity-logs"
 
-// Activity type icons and styles
+// Activity type icons and styles - using semantic CSS classes from index.css
 const ACTIVITY_CONFIG: Record<
   string,
   { icon: typeof Activity; className: string }
 > = {
   // Sync
-  sync_started: { icon: RefreshCw, className: "text-blue-500" },
-  sync_completed: { icon: CheckCircle2, className: "text-green-500" },
-  sync_failed: { icon: XCircle, className: "text-red-500" },
+  sync_started: { icon: RefreshCw, className: "activity-sync" },
+  sync_completed: { icon: CheckCircle2, className: "activity-success" },
+  sync_failed: { icon: XCircle, className: "activity-error" },
   // Photos
-  photos_added: { icon: Plus, className: "text-emerald-500" },
-  photos_trashed: { icon: Trash2, className: "text-orange-500" },
-  photos_restored: { icon: RotateCcw, className: "text-cyan-500" },
-  photos_deleted: { icon: XCircle, className: "text-red-600" },
+  photos_added: { icon: Plus, className: "activity-add" },
+  photos_trashed: { icon: Trash2, className: "activity-trash" },
+  photos_restored: { icon: RotateCcw, className: "activity-restore" },
+  photos_deleted: { icon: XCircle, className: "activity-error" },
+  photo_renamed: { icon: Activity, className: "activity-folder" },
+  photo_moved: { icon: Activity, className: "activity-move" },
+  photo_updated: { icon: RefreshCw, className: "activity-sync" },
   // Folders
-  folder_trashed: { icon: Trash2, className: "text-orange-600" },
-  folder_restored: { icon: RotateCcw, className: "text-cyan-600" },
-  folder_renamed: { icon: FolderOpen, className: "text-purple-500" },
-  folder_deleted: { icon: XCircle, className: "text-red-700" },
+  folder_trashed: { icon: Trash2, className: "activity-trash" },
+  folder_restored: { icon: RotateCcw, className: "activity-restore" },
+  folder_renamed: { icon: FolderOpen, className: "activity-folder" },
+  folder_moved: { icon: FolderOpen, className: "activity-move" },
+  folder_deleted: { icon: XCircle, className: "activity-error" },
   // Webhook
-  webhook_received: { icon: Bell, className: "text-indigo-500" },
-  webhook_renewed: { icon: RefreshCw, className: "text-indigo-600" },
-  webhook_expired: { icon: AlertTriangle, className: "text-yellow-600" },
+  webhook_received: { icon: Bell, className: "activity-webhook" },
+  webhook_renewed: { icon: RefreshCw, className: "activity-webhook" },
+  webhook_expired: { icon: AlertTriangle, className: "activity-warning" },
   // Errors
-  token_expired: { icon: AlertCircle, className: "text-red-500" },
-  sync_error: { icon: AlertCircle, className: "text-red-600" },
+  token_expired: { icon: AlertCircle, className: "activity-error" },
+  sync_error: { icon: AlertCircle, className: "activity-error" },
 }
 
 const DEFAULT_CONFIG = { icon: Activity, className: "text-muted-foreground" }

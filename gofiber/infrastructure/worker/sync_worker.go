@@ -636,6 +636,13 @@ func (w *SyncWorker) processIncrementalSync(ctx context.Context, job models.Sync
 						}, change)
 				}
 
+				// Get old folder path from existing photo in DB to detect rename vs move
+				oldFolderPath := ""
+				existingPhotos, _, _ := w.photoRepo.GetBySharedFolderAndDriveFolderID(ctx, folder.ID, file.Id, 0, 1)
+				if len(existingPhotos) > 0 {
+					oldFolderPath = existingPhotos[0].DriveFolderPath
+				}
+
 				// Get the new folder path
 				newFolderPath, err := w.driveClient.GetFolderPath(ctx, srv, file.Id, folder.DriveFolderID)
 				if err == nil && newFolderPath != "" {
@@ -646,22 +653,57 @@ func (w *SyncWorker) processIncrementalSync(ctx context.Context, job models.Sync
 						logger.Sync("folder_path_updated", "Updated folder path for photos", map[string]interface{}{
 							"job_id":          jobID.String(),
 							"drive_folder_id": file.Id,
+							"old_path":        oldFolderPath,
 							"new_path":        newFolderPath,
 							"photo_count":     updatedCount,
 						})
 
-						// Only log "folder renamed" if this was NOT a restore operation
-						// (restore already implies path update, no need to log twice)
+						// Only log if this was NOT a restore operation
 						if !wasRestored {
-							w.logActivity(ctx, folder.ID, models.ActivityFolderRenamed,
-								fmt.Sprintf("โฟลเดอร์เปลี่ยนชื่อ/ย้าย เป็น %s (รูปภาพ %d รูปถูกอัพเดท)", newFolderPath, updatedCount),
-								&models.ActivityDetails{
-									JobID:         jobID.String(),
-									FolderName:    file.Name,
-									FolderPath:    newFolderPath,
-									DriveFolderID: file.Id,
-									TotalUpdated:  int(updatedCount),
-								}, change)
+							// Detect rename vs move by comparing paths
+							isRename := false
+							isMoved := false
+
+							if oldFolderPath != "" && oldFolderPath != newFolderPath {
+								// Extract parent path and folder name
+								oldParent := getParentPath(oldFolderPath)
+								newParent := getParentPath(newFolderPath)
+								oldName := getFolderName(oldFolderPath)
+								newName := getFolderName(newFolderPath)
+
+								if oldParent == newParent && oldName != newName {
+									// Same parent, different name = rename
+									isRename = true
+								} else if oldParent != newParent {
+									// Different parent = move
+									isMoved = true
+								}
+							} else if oldFolderPath == "" {
+								// No old path (new folder or first sync) - treat as rename
+								isRename = true
+							}
+
+							if isRename {
+								w.logActivity(ctx, folder.ID, models.ActivityFolderRenamed,
+									fmt.Sprintf("โฟลเดอร์เปลี่ยนชื่อเป็น %s (รูปภาพ %d รูปถูกอัพเดท)", file.Name, updatedCount),
+									&models.ActivityDetails{
+										JobID:         jobID.String(),
+										FolderName:    file.Name,
+										FolderPath:    newFolderPath,
+										DriveFolderID: file.Id,
+										TotalUpdated:  int(updatedCount),
+									}, change)
+							} else if isMoved {
+								w.logActivity(ctx, folder.ID, models.ActivityFolderMoved,
+									fmt.Sprintf("โฟลเดอร์ย้ายไปที่ %s (รูปภาพ %d รูปถูกอัพเดท)", newFolderPath, updatedCount),
+									&models.ActivityDetails{
+										JobID:         jobID.String(),
+										FolderName:    file.Name,
+										FolderPath:    newFolderPath,
+										DriveFolderID: file.Id,
+										TotalUpdated:  int(updatedCount),
+									}, change)
+							}
 						}
 					}
 				}
@@ -716,8 +758,16 @@ func (w *SyncWorker) processIncrementalSync(ctx context.Context, job models.Sync
 			folderPath, _ := w.driveClient.GetFolderPath(ctx, srv, parentID, folder.DriveFolderID)
 			modifiedTime, _ := time.Parse(time.RFC3339, file.ModifiedTime)
 
+			// Track what changed for logging
+			wasRestored := false
+			wasRenamed := existingPhoto.FileName != file.Name
+			wasMoved := existingPhoto.DriveFolderID != parentID
+			oldFileName := existingPhoto.FileName
+			oldFolderPath := existingPhoto.DriveFolderPath
+
 			// Restore from trash if was trashed
 			if existingPhoto.IsTrashed {
+				wasRestored = true
 				existingPhoto.IsTrashed = false
 				existingPhoto.TrashedAt = nil
 				logger.Sync("photo_restored", "Restored photo from trash", map[string]interface{}{
@@ -737,6 +787,7 @@ func (w *SyncWorker) processIncrementalSync(ctx context.Context, job models.Sync
 					}, change)
 			}
 
+			// Update photo data
 			existingPhoto.FileName = file.Name
 			existingPhoto.ThumbnailURL = file.ThumbnailLink
 			existingPhoto.WebViewURL = file.WebViewLink
@@ -746,6 +797,42 @@ func (w *SyncWorker) processIncrementalSync(ctx context.Context, job models.Sync
 			existingPhoto.UpdatedAt = time.Now()
 			w.photoRepo.Update(ctx, existingPhoto.ID, existingPhoto)
 			totalUpdated++
+
+			// Log specific change type (only if not restored, to avoid double logging)
+			if !wasRestored {
+				if wasMoved && wasRenamed {
+					// Both moved and renamed
+					w.logActivity(ctx, folder.ID, models.ActivityPhotoMoved,
+						fmt.Sprintf("รูปภาพ %s ถูกย้ายและเปลี่ยนชื่อเป็น %s ที่ %s", oldFileName, file.Name, folderPath),
+						&models.ActivityDetails{
+							JobID:       jobID.String(),
+							FileNames:   []string{file.Name},
+							DriveFileID: file.Id,
+							FolderPath:  folderPath,
+						}, change)
+				} else if wasMoved {
+					// Only moved
+					w.logActivity(ctx, folder.ID, models.ActivityPhotoMoved,
+						fmt.Sprintf("รูปภาพ %s ถูกย้ายจาก %s ไปที่ %s", file.Name, oldFolderPath, folderPath),
+						&models.ActivityDetails{
+							JobID:       jobID.String(),
+							FileNames:   []string{file.Name},
+							DriveFileID: file.Id,
+							FolderPath:  folderPath,
+						}, change)
+				} else if wasRenamed {
+					// Only renamed
+					w.logActivity(ctx, folder.ID, models.ActivityPhotoRenamed,
+						fmt.Sprintf("รูปภาพเปลี่ยนชื่อจาก %s เป็น %s", oldFileName, file.Name),
+						&models.ActivityDetails{
+							JobID:       jobID.String(),
+							FileNames:   []string{oldFileName, file.Name},
+							DriveFileID: file.Id,
+						}, change)
+				}
+				// Note: We don't log ActivityPhotoUpdated for every update to avoid log spam
+				// Only significant changes (rename, move) are logged
+			}
 		} else {
 			folderPath, _ := w.driveClient.GetFolderPath(ctx, srv, parentID, folder.DriveFolderID)
 			createdTime, _ := time.Parse(time.RFC3339, file.CreatedTime)
@@ -1360,4 +1447,24 @@ func (w *SyncWorker) isWithinRootFolder(ctx context.Context, srv *drive.Service,
 	}
 
 	return false
+}
+
+// getParentPath extracts the parent path from a full folder path
+// e.g., "KU TEST/Subfolder/MyFolder" → "KU TEST/Subfolder"
+func getParentPath(path string) string {
+	lastSlash := strings.LastIndex(path, "/")
+	if lastSlash == -1 {
+		return "" // Root level
+	}
+	return path[:lastSlash]
+}
+
+// getFolderName extracts the folder name from a full folder path
+// e.g., "KU TEST/Subfolder/MyFolder" → "MyFolder"
+func getFolderName(path string) string {
+	lastSlash := strings.LastIndex(path, "/")
+	if lastSlash == -1 {
+		return path // Already just the name
+	}
+	return path[lastSlash+1:]
 }
