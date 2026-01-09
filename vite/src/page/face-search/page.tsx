@@ -328,7 +328,7 @@ export default function FaceSearchPage() {
       {/* Main Content */}
       <div className="grid grid-cols-12 gap-6">
         {/* Sidebar - Upload & Settings */}
-        <div className="col-span-12 lg:col-span-2">
+        <div className="col-span-12 lg:col-span-3">
           <div className="space-y-4">
             {/* Upload Zone */}
             <div className="space-y-2">
@@ -540,7 +540,7 @@ export default function FaceSearchPage() {
         </div>
 
         {/* Results Grid */}
-        <div className="col-span-12 lg:col-span-10">
+        <div className="col-span-12 lg:col-span-9">
           {searchMutation.isPending ? (
             <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
               {Array.from({ length: 18 }).map((_, i) => (
