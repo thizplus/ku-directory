@@ -530,18 +530,37 @@ func (w *SyncWorker) processIncrementalSync(ctx context.Context, job models.Sync
 
 		file := change.File
 
-		// Handle folder changes (renamed folders)
-		// Note: Trashed folders are NOT deleted here - only permanent delete (change.Removed) triggers deletion
-		// This allows users to restore from trash without losing data
+		// Handle folder changes (trashed or renamed folders)
 		if file.MimeType == "application/vnd.google-apps.folder" {
-			// Skip trashed folders - they'll be deleted when permanently removed
+			// Soft delete: Mark all photos in folder as trashed
 			if file.Trashed {
+				trashedCount, err := w.photoRepo.SetTrashedByDriveFolderID(ctx, file.Id, true)
+				if err == nil && trashedCount > 0 {
+					totalUpdated += int(trashedCount)
+					logger.Sync("folder_soft_deleted", "Marked photos as trashed (folder moved to trash)", map[string]interface{}{
+						"job_id":          jobID.String(),
+						"drive_folder_id": file.Id,
+						"folder_name":     file.Name,
+						"trashed_count":   trashedCount,
+					})
+				}
 				totalProcessed++
 				continue
 			}
 
-			// Check if this folder is within our root folder (for rename handling)
+			// Check if this folder is within our root folder (for rename or restore handling)
 			if w.isWithinRootFolder(ctx, srv, file.Id, folder.DriveFolderID) || file.Id == folder.DriveFolderID {
+				// Restore: If folder was restored from trash, unmark photos
+				restoredCount, _ := w.photoRepo.SetTrashedByDriveFolderID(ctx, file.Id, false)
+				if restoredCount > 0 {
+					totalUpdated += int(restoredCount)
+					logger.Sync("folder_restored", "Restored photos from trash (folder restored)", map[string]interface{}{
+						"job_id":          jobID.String(),
+						"drive_folder_id": file.Id,
+						"folder_name":     file.Name,
+						"restored_count":  restoredCount,
+					})
+				}
 				// Get the new folder path
 				newFolderPath, err := w.driveClient.GetFolderPath(ctx, srv, file.Id, folder.DriveFolderID)
 				if err == nil && newFolderPath != "" {
@@ -567,9 +586,17 @@ func (w *SyncWorker) processIncrementalSync(ctx context.Context, job models.Sync
 			continue
 		}
 
-		// Skip trashed photos - they'll be deleted when permanently removed (change.Removed)
-		// This allows users to restore from trash without losing data
+		// Soft delete: Mark photo as trashed
 		if file.Trashed {
+			err := w.photoRepo.SetTrashedByDriveFileID(ctx, file.Id, true)
+			if err == nil {
+				totalUpdated++
+				logger.Sync("photo_soft_deleted", "Marked photo as trashed", map[string]interface{}{
+					"job_id":        jobID.String(),
+					"drive_file_id": file.Id,
+					"file_name":     file.Name,
+				})
+			}
 			totalProcessed++
 			continue
 		}
@@ -588,6 +615,17 @@ func (w *SyncWorker) processIncrementalSync(ctx context.Context, job models.Sync
 		if existingPhoto != nil {
 			folderPath, _ := w.driveClient.GetFolderPath(ctx, srv, parentID, folder.DriveFolderID)
 			modifiedTime, _ := time.Parse(time.RFC3339, file.ModifiedTime)
+
+			// Restore from trash if was trashed
+			if existingPhoto.IsTrashed {
+				existingPhoto.IsTrashed = false
+				existingPhoto.TrashedAt = nil
+				logger.Sync("photo_restored", "Restored photo from trash", map[string]interface{}{
+					"job_id":        jobID.String(),
+					"drive_file_id": file.Id,
+					"file_name":     file.Name,
+				})
+			}
 
 			existingPhoto.FileName = file.Name
 			existingPhoto.ThumbnailURL = file.ThumbnailLink

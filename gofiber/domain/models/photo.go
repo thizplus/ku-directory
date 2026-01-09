@@ -39,9 +39,13 @@ type Photo struct {
 	DriveModifiedAt *time.Time // Last modified time in Drive
 
 	// Face processing
-	FaceStatus     FaceProcessingStatus `gorm:"default:'pending';index"`
-	FaceCount      int                  `gorm:"default:0"` // Number of faces detected
+	FaceStatus      FaceProcessingStatus `gorm:"default:'pending';index"`
+	FaceCount       int                  `gorm:"default:0"` // Number of faces detected
 	FaceProcessedAt *time.Time
+
+	// Soft delete (Google Drive trash)
+	IsTrashed bool       `gorm:"default:false;index"` // True if in Google Drive trash
+	TrashedAt *time.Time // When moved to trash
 
 	CreatedAt time.Time
 	UpdatedAt time.Time

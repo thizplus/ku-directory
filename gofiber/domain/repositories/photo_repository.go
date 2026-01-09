@@ -39,7 +39,11 @@ type PhotoRepository interface {
 	ResetFailedToPending(ctx context.Context, folderID *uuid.UUID) (int64, error)                      // Reset failed photos to pending, optionally by folder
 	ResetStuckProcessingToPending(ctx context.Context, stuckThresholdMinutes int) (int64, error)     // Reset photos stuck in processing for too long
 
-	// Delete operations
+	// Soft delete (trash) operations
+	SetTrashedByDriveFileID(ctx context.Context, driveFileID string, isTrashed bool) error
+	SetTrashedByDriveFolderID(ctx context.Context, driveFolderID string, isTrashed bool) (int64, error)
+
+	// Delete operations (hard delete)
 	DeleteByDriveFileID(ctx context.Context, driveFileID string) error
 	DeleteByDriveFolderID(ctx context.Context, driveFolderID string) (int64, error)
 	DeleteNotInDriveIDsForFolder(ctx context.Context, folderID uuid.UUID, driveFileIDs []string) (int64, error)

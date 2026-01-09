@@ -160,6 +160,7 @@ func (r *PhotoRepositoryImpl) GetPendingFaceProcessing(ctx context.Context, user
 	var photos []models.Photo
 	err := r.db.WithContext(ctx).
 		Where("user_id = ? AND face_status = ?", userID, models.FaceStatusPending).
+		Where("is_trashed = ?", false).
 		Order("created_at ASC").
 		Limit(limit).
 		Find(&photos).Error
@@ -171,6 +172,7 @@ func (r *PhotoRepositoryImpl) GetByFaceStatus(ctx context.Context, status models
 	var photos []models.Photo
 	err := r.db.WithContext(ctx).
 		Where("face_status = ?", status).
+		Where("is_trashed = ?", false).
 		Order("created_at ASC").
 		Limit(limit).
 		Find(&photos).Error
@@ -183,6 +185,7 @@ func (r *PhotoRepositoryImpl) GetPendingBySharedFolders(ctx context.Context, fol
 	err := r.db.WithContext(ctx).
 		Where("shared_folder_id IN ?", folderIDs).
 		Where("face_status = ?", models.FaceStatusPending).
+		Where("is_trashed = ?", false).
 		Order("created_at ASC").
 		Limit(limit).
 		Find(&photos).Error
@@ -217,6 +220,41 @@ func (r *PhotoRepositoryImpl) UpdateFolderPath(ctx context.Context, driveFolderI
 
 func (r *PhotoRepositoryImpl) Delete(ctx context.Context, id uuid.UUID) error {
 	return r.db.WithContext(ctx).Where("id = ?", id).Delete(&models.Photo{}).Error
+}
+
+// SetTrashedByDriveFileID sets the trashed status for a photo by its Drive file ID
+func (r *PhotoRepositoryImpl) SetTrashedByDriveFileID(ctx context.Context, driveFileID string, isTrashed bool) error {
+	updates := map[string]interface{}{
+		"is_trashed": isTrashed,
+		"updated_at": time.Now(),
+	}
+	if isTrashed {
+		now := time.Now()
+		updates["trashed_at"] = &now
+	} else {
+		updates["trashed_at"] = nil
+	}
+	return r.db.WithContext(ctx).Model(&models.Photo{}).
+		Where("drive_file_id = ?", driveFileID).
+		Updates(updates).Error
+}
+
+// SetTrashedByDriveFolderID sets the trashed status for all photos in a folder
+func (r *PhotoRepositoryImpl) SetTrashedByDriveFolderID(ctx context.Context, driveFolderID string, isTrashed bool) (int64, error) {
+	updates := map[string]interface{}{
+		"is_trashed": isTrashed,
+		"updated_at": time.Now(),
+	}
+	if isTrashed {
+		now := time.Now()
+		updates["trashed_at"] = &now
+	} else {
+		updates["trashed_at"] = nil
+	}
+	result := r.db.WithContext(ctx).Model(&models.Photo{}).
+		Where("drive_folder_id = ?", driveFolderID).
+		Updates(updates)
+	return result.RowsAffected, result.Error
 }
 
 func (r *PhotoRepositoryImpl) DeleteByDriveFileID(ctx context.Context, driveFileID string) error {
@@ -383,7 +421,9 @@ func (r *PhotoRepositoryImpl) GetBySharedFolder(ctx context.Context, folderID uu
 	var photos []models.Photo
 	var total int64
 
-	query := r.db.WithContext(ctx).Model(&models.Photo{}).Where("shared_folder_id = ?", folderID)
+	query := r.db.WithContext(ctx).Model(&models.Photo{}).
+		Where("shared_folder_id = ?", folderID).
+		Where("is_trashed = ?", false)
 
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -402,7 +442,9 @@ func (r *PhotoRepositoryImpl) GetBySharedFolderAndPath(ctx context.Context, fold
 	var photos []models.Photo
 	var total int64
 
-	query := r.db.WithContext(ctx).Model(&models.Photo{}).Where("shared_folder_id = ?", folderID)
+	query := r.db.WithContext(ctx).Model(&models.Photo{}).
+		Where("shared_folder_id = ?", folderID).
+		Where("is_trashed = ?", false)
 	if folderPath != "" {
 		query = query.Where("drive_folder_path = ?", folderPath)
 	}
@@ -424,7 +466,9 @@ func (r *PhotoRepositoryImpl) GetBySharedFolderAndDriveFolderID(ctx context.Cont
 	var photos []models.Photo
 	var total int64
 
-	query := r.db.WithContext(ctx).Model(&models.Photo{}).Where("shared_folder_id = ?", folderID)
+	query := r.db.WithContext(ctx).Model(&models.Photo{}).
+		Where("shared_folder_id = ?", folderID).
+		Where("is_trashed = ?", false)
 	if driveFolderID != "" {
 		query = query.Where("drive_folder_id = ?", driveFolderID)
 	}
@@ -446,7 +490,9 @@ func (r *PhotoRepositoryImpl) SearchByFolderPathInSharedFolder(ctx context.Conte
 	var photos []models.Photo
 	var total int64
 
-	query := r.db.WithContext(ctx).Model(&models.Photo{}).Where("shared_folder_id = ?", folderID)
+	query := r.db.WithContext(ctx).Model(&models.Photo{}).
+		Where("shared_folder_id = ?", folderID).
+		Where("is_trashed = ?", false)
 	if searchQuery != "" {
 		query = query.Where("LOWER(drive_folder_path) LIKE LOWER(?)", "%"+searchQuery+"%")
 	}
@@ -469,6 +515,7 @@ func (r *PhotoRepositoryImpl) GetFolderPathsInSharedFolder(ctx context.Context, 
 	err := r.db.WithContext(ctx).
 		Model(&models.Photo{}).
 		Where("shared_folder_id = ?", folderID).
+		Where("is_trashed = ?", false).
 		Distinct("drive_folder_path").
 		Pluck("drive_folder_path", &paths).Error
 
@@ -477,7 +524,10 @@ func (r *PhotoRepositoryImpl) GetFolderPathsInSharedFolder(ctx context.Context, 
 
 func (r *PhotoRepositoryImpl) CountBySharedFolder(ctx context.Context, folderID uuid.UUID) (int64, error) {
 	var count int64
-	err := r.db.WithContext(ctx).Model(&models.Photo{}).Where("shared_folder_id = ?", folderID).Count(&count).Error
+	err := r.db.WithContext(ctx).Model(&models.Photo{}).
+		Where("shared_folder_id = ?", folderID).
+		Where("is_trashed = ?", false).
+		Count(&count).Error
 	return count, err
 }
 
@@ -486,6 +536,7 @@ func (r *PhotoRepositoryImpl) CountBySharedFolderAndFaceStatus(ctx context.Conte
 	err := r.db.WithContext(ctx).
 		Model(&models.Photo{}).
 		Where("shared_folder_id = ? AND face_status = ?", folderID, status).
+		Where("is_trashed = ?", false).
 		Count(&count).Error
 	return count, err
 }
@@ -500,7 +551,9 @@ func (r *PhotoRepositoryImpl) GetBySharedFolders(ctx context.Context, folderIDs 
 		return photos, 0, nil
 	}
 
-	query := r.db.WithContext(ctx).Model(&models.Photo{}).Where("shared_folder_id IN ?", folderIDs)
+	query := r.db.WithContext(ctx).Model(&models.Photo{}).
+		Where("shared_folder_id IN ?", folderIDs).
+		Where("is_trashed = ?", false)
 
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -523,7 +576,9 @@ func (r *PhotoRepositoryImpl) GetBySharedFoldersAndPath(ctx context.Context, fol
 		return photos, 0, nil
 	}
 
-	query := r.db.WithContext(ctx).Model(&models.Photo{}).Where("shared_folder_id IN ?", folderIDs)
+	query := r.db.WithContext(ctx).Model(&models.Photo{}).
+		Where("shared_folder_id IN ?", folderIDs).
+		Where("is_trashed = ?", false)
 	if folderPath != "" {
 		query = query.Where("drive_folder_path = ?", folderPath)
 	}
