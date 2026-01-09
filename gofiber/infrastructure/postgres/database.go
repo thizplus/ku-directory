@@ -59,6 +59,7 @@ func Migrate(db *gorm.DB) error {
 		&models.NewsPhoto{},
 		&models.SyncJob{},
 		&models.DriveWebhookLog{},
+		&models.ActivityLog{},
 	); err != nil {
 		return fmt.Errorf("failed to run auto migrations: %v", err)
 	}
