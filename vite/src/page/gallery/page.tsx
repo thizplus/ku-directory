@@ -543,9 +543,29 @@ export default function GalleryPage() {
   if (!selectedFolderId) {
     return (
       <div className="space-y-4">
+        {/* Stats Header */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="rounded-lg border bg-card p-3">
+            <div className="text-2xl font-semibold">{stats?.total_photos || 0}</div>
+            <div className="text-xs text-muted-foreground">รูปภาพทั้งหมด</div>
+          </div>
+          <div className="rounded-lg border bg-card p-3">
+            <div className="text-2xl font-semibold">{stats?.processed_photos || 0}</div>
+            <div className="text-xs text-muted-foreground">ประมวลผลแล้ว</div>
+          </div>
+          <div className="rounded-lg border bg-card p-3">
+            <div className="text-2xl font-semibold">{stats?.total_faces || 0}</div>
+            <div className="text-xs text-muted-foreground">ใบหน้าที่พบ</div>
+          </div>
+          <div className="rounded-lg border bg-card p-3">
+            <div className="text-2xl font-semibold">{sharedFolders.length}</div>
+            <div className="text-xs text-muted-foreground">โฟลเดอร์</div>
+          </div>
+        </div>
+
         {/* Header */}
         <div className="flex items-center justify-between">
-          <h1 className="text-xl font-medium">โฟลเดอร์ทั้งหมด</h1>
+          <h1 className="text-lg font-medium">โฟลเดอร์ทั้งหมด</h1>
           <div className="flex items-center gap-1">
             <div className="flex items-center border rounded-md">
               <button
@@ -613,14 +633,6 @@ export default function GalleryPage() {
             ))}
           </div>
         )}
-
-        {/* Stats footer */}
-        <Separator />
-        <div className="flex items-center justify-center gap-6 text-xs text-muted-foreground">
-          <span>{stats?.total_photos || 0} รูป</span>
-          <span>{stats?.processed_photos || 0} ประมวลผลแล้ว</span>
-          <span>{stats?.total_faces || 0} ใบหน้า</span>
-        </div>
       </div>
     )
   }
