@@ -16,6 +16,7 @@ type PhotoRepository interface {
 	GetByDriveFileID(ctx context.Context, driveFileID string) (*models.Photo, error)
 	Update(ctx context.Context, id uuid.UUID, photo *models.Photo) error
 	UpdateFaceStatus(ctx context.Context, id uuid.UUID, status models.FaceProcessingStatus, faceCount int) error
+	UpdateFolderPath(ctx context.Context, driveFolderID string, newPath string) (int64, error)
 	Delete(ctx context.Context, id uuid.UUID) error
 
 	// SharedFolder-based queries

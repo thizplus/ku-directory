@@ -204,6 +204,17 @@ func (r *PhotoRepositoryImpl) UpdateFaceStatus(ctx context.Context, id uuid.UUID
 	return r.db.WithContext(ctx).Model(&models.Photo{}).Where("id = ?", id).Updates(updates).Error
 }
 
+// UpdateFolderPath updates the folder path for all photos with the given drive_folder_id
+func (r *PhotoRepositoryImpl) UpdateFolderPath(ctx context.Context, driveFolderID string, newPath string) (int64, error) {
+	result := r.db.WithContext(ctx).Model(&models.Photo{}).
+		Where("drive_folder_id = ?", driveFolderID).
+		Updates(map[string]interface{}{
+			"drive_folder_path": newPath,
+			"updated_at":        time.Now(),
+		})
+	return result.RowsAffected, result.Error
+}
+
 func (r *PhotoRepositoryImpl) Delete(ctx context.Context, id uuid.UUID) error {
 	return r.db.WithContext(ctx).Where("id = ?", id).Delete(&models.Photo{}).Error
 }

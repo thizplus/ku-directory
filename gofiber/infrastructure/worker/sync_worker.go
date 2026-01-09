@@ -530,6 +530,30 @@ func (w *SyncWorker) processIncrementalSync(ctx context.Context, job models.Sync
 
 		file := change.File
 
+		// Handle folder changes (renamed folders)
+		if file.MimeType == "application/vnd.google-apps.folder" {
+			// Check if this folder is within our root folder
+			if w.isWithinRootFolder(ctx, srv, file.Id, folder.DriveFolderID) || file.Id == folder.DriveFolderID {
+				// Get the new folder path
+				newFolderPath, err := w.driveClient.GetFolderPath(ctx, srv, file.Id, folder.DriveFolderID)
+				if err == nil && newFolderPath != "" {
+					// Update all photos with this folder ID to have the new path
+					updatedCount, err := w.photoRepo.UpdateFolderPath(ctx, file.Id, newFolderPath)
+					if err == nil && updatedCount > 0 {
+						totalUpdated += int(updatedCount)
+						logger.Sync("folder_path_updated", "Updated folder path for photos", map[string]interface{}{
+							"job_id":          jobID.String(),
+							"drive_folder_id": file.Id,
+							"new_path":        newFolderPath,
+							"photo_count":     updatedCount,
+						})
+					}
+				}
+			}
+			totalProcessed++
+			continue
+		}
+
 		if file.MimeType == "" || !isImageMimeType(file.MimeType) {
 			totalProcessed++
 			continue
