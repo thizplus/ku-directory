@@ -656,7 +656,7 @@ func (c *DriveClient) GetChanges(ctx context.Context, srv *drive.Service, startP
 
 	for {
 		result, err := srv.Changes.List(pageToken).
-			Fields("nextPageToken, newStartPageToken, changes(fileId, file, removed, time)").
+			Fields("nextPageToken, newStartPageToken, changes(fileId, removed, time, file(id, name, mimeType, trashed, parents, thumbnailLink, webViewLink, createdTime, modifiedTime, size))").
 			PageSize(100).
 			SupportsAllDrives(true).
 			IncludeItemsFromAllDrives(true).

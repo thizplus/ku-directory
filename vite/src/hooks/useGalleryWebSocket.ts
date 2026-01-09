@@ -88,6 +88,13 @@ export function useGalleryWebSocket() {
           queryClient.invalidateQueries({ queryKey: ['faces', 'stats'] })
           break
 
+        case 'photos:deleted':
+          // Photos deleted during sync - invalidate photos and folders queries
+          console.log('Photos deleted:', message.data.count)
+          queryClient.invalidateQueries({ queryKey: foldersKeys.all })
+          queryClient.invalidateQueries({ queryKey: ['faces', 'stats'] })
+          break
+
         case 'photo:updated':
           // Photo updated (face detection) - update stats store directly
           {
