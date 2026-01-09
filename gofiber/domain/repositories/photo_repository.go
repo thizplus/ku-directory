@@ -40,7 +40,8 @@ type PhotoRepository interface {
 	ResetStuckProcessingToPending(ctx context.Context, stuckThresholdMinutes int) (int64, error)     // Reset photos stuck in processing for too long
 
 	// Soft delete (trash) operations
-	SetTrashedByDriveFileID(ctx context.Context, driveFileID string, isTrashed bool) error
+	// SetTrashedByDriveFileID returns (wasUpdated, error) - wasUpdated is true if state actually changed
+	SetTrashedByDriveFileID(ctx context.Context, driveFileID string, isTrashed bool) (bool, error)
 	SetTrashedByDriveFolderID(ctx context.Context, driveFolderID string, isTrashed bool) (int64, error)
 
 	// Delete operations (hard delete)

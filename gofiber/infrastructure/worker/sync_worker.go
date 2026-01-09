@@ -676,9 +676,10 @@ func (w *SyncWorker) processIncrementalSync(ctx context.Context, job models.Sync
 		}
 
 		// Soft delete: Mark photo as trashed
+		// Only log if photo was actually updated (not already trashed by folder operation)
 		if file.Trashed {
-			err := w.photoRepo.SetTrashedByDriveFileID(ctx, file.Id, true)
-			if err == nil {
+			wasUpdated, err := w.photoRepo.SetTrashedByDriveFileID(ctx, file.Id, true)
+			if err == nil && wasUpdated {
 				totalUpdated++
 				logger.Sync("photo_soft_deleted", "Marked photo as trashed", map[string]interface{}{
 					"job_id":        jobID.String(),

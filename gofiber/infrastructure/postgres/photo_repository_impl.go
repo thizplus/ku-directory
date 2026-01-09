@@ -225,7 +225,8 @@ func (r *PhotoRepositoryImpl) Delete(ctx context.Context, id uuid.UUID) error {
 }
 
 // SetTrashedByDriveFileID sets the trashed status for a photo by its Drive file ID
-func (r *PhotoRepositoryImpl) SetTrashedByDriveFileID(ctx context.Context, driveFileID string, isTrashed bool) error {
+// Returns true if the photo was actually updated (state changed), false if already in target state
+func (r *PhotoRepositoryImpl) SetTrashedByDriveFileID(ctx context.Context, driveFileID string, isTrashed bool) (bool, error) {
 	updates := map[string]interface{}{
 		"is_trashed": isTrashed,
 		"updated_at": time.Now(),
@@ -236,9 +237,11 @@ func (r *PhotoRepositoryImpl) SetTrashedByDriveFileID(ctx context.Context, drive
 	} else {
 		updates["trashed_at"] = nil
 	}
-	return r.db.WithContext(ctx).Model(&models.Photo{}).
+	result := r.db.WithContext(ctx).Model(&models.Photo{}).
 		Where("drive_file_id = ?", driveFileID).
-		Updates(updates).Error
+		Where("is_trashed = ?", !isTrashed). // Only update if state needs to change
+		Updates(updates)
+	return result.RowsAffected > 0, result.Error
 }
 
 // SetTrashedByDriveFolderID sets the trashed status for all photos in a folder
