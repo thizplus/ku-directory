@@ -208,9 +208,11 @@ func (r *PhotoRepositoryImpl) UpdateFaceStatus(ctx context.Context, id uuid.UUID
 }
 
 // UpdateFolderPath updates the folder path for all photos with the given drive_folder_id
+// Only updates photos where the path actually changed
 func (r *PhotoRepositoryImpl) UpdateFolderPath(ctx context.Context, driveFolderID string, newPath string) (int64, error) {
 	result := r.db.WithContext(ctx).Model(&models.Photo{}).
 		Where("drive_folder_id = ?", driveFolderID).
+		Where("drive_folder_path != ? OR drive_folder_path IS NULL", newPath). // Only update if path changed
 		Updates(map[string]interface{}{
 			"drive_folder_path": newPath,
 			"updated_at":        time.Now(),

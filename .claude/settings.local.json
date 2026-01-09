@@ -72,7 +72,8 @@
       "WebFetch(domain:api.dangku.online)",
       "WebFetch(domain:ku-directory-vite.wti9as.easypanel.host)",
       "WebFetch(domain:ku-directory-api.wti9as.easypanel.host)",
-      "WebFetch(domain:api.dangku.pics)"
+      "WebFetch(domain:api.dangku.pics)",
+      "Bash(trash\" even for non-trashed folders.\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")"
     ]
   }
 }
