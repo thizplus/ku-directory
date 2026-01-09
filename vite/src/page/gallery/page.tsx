@@ -544,24 +544,45 @@ export default function GalleryPage() {
     return (
       <div className="space-y-4">
         {/* Stats Header */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <div className="rounded-lg border bg-card p-3">
-            <div className="text-2xl font-semibold">{stats?.total_photos || 0}</div>
-            <div className="text-xs text-muted-foreground">รูปภาพทั้งหมด</div>
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+          <div className="space-y-1">
+            <p className="text-xs text-muted-foreground flex items-center gap-1">
+              <Images className="h-3.5 w-3.5" />
+              รูปภาพทั้งหมด
+            </p>
+            <p className="text-lg font-semibold tabular-nums">{stats?.total_photos || 0}</p>
           </div>
-          <div className="rounded-lg border bg-card p-3">
-            <div className="text-2xl font-semibold">{stats?.processed_photos || 0}</div>
-            <div className="text-xs text-muted-foreground">ประมวลผลแล้ว</div>
+          <div className="space-y-1">
+            <p className="text-xs text-muted-foreground flex items-center gap-1">
+              <Users className="h-3.5 w-3.5" />
+              ใบหน้าที่พบ
+            </p>
+            <p className="text-lg font-semibold tabular-nums">{stats?.total_faces || 0}</p>
           </div>
-          <div className="rounded-lg border bg-card p-3">
-            <div className="text-2xl font-semibold">{stats?.total_faces || 0}</div>
-            <div className="text-xs text-muted-foreground">ใบหน้าที่พบ</div>
+          <div className="space-y-1">
+            <p className="text-xs text-muted-foreground flex items-center gap-1">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              ประมวลผลแล้ว
+            </p>
+            <p className="text-lg font-semibold tabular-nums">{stats?.processed_photos || 0}</p>
           </div>
-          <div className="rounded-lg border bg-card p-3">
-            <div className="text-2xl font-semibold">{sharedFolders.length}</div>
-            <div className="text-xs text-muted-foreground">โฟลเดอร์</div>
+          <div className="space-y-1">
+            <p className="text-xs text-muted-foreground flex items-center gap-1">
+              <Clock className="h-3.5 w-3.5" />
+              รอประมวลผล
+            </p>
+            <p className="text-lg font-semibold tabular-nums">{stats?.pending_photos || 0}</p>
+          </div>
+          <div className="space-y-1">
+            <p className="text-xs text-muted-foreground flex items-center gap-1">
+              <Folder className="h-3.5 w-3.5" />
+              โฟลเดอร์
+            </p>
+            <p className="text-lg font-semibold tabular-nums">{sharedFolders.length}</p>
           </div>
         </div>
+
+        <Separator />
 
         {/* Header */}
         <div className="flex items-center justify-between">

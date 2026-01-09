@@ -69,7 +69,8 @@
       "WebFetch(domain:github.com)",
       "Bash(timeout:*)",
       "WebFetch(domain:raw.githubusercontent.com)",
-      "WebFetch(domain:api.dangku.online)"
+      "WebFetch(domain:api.dangku.online)",
+      "WebFetch(domain:ku-directory-vite.wti9as.easypanel.host)"
     ]
   }
 }
