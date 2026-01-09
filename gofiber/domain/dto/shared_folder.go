@@ -28,6 +28,10 @@ type SharedFolderResponse struct {
 	UserCount       int64           `json:"user_count"`
 	Children        []SubFolderInfo `json:"children,omitempty"`
 	CreatedAt       time.Time       `json:"created_at"`
+
+	// Webhook status
+	WebhookStatus string     `json:"webhook_status"`           // "active", "expiring", "expired", "inactive"
+	WebhookExpiry *time.Time `json:"webhook_expiry,omitempty"` // When webhook expires
 }
 
 // AddFolderRequest is the request for adding a new folder
@@ -46,6 +50,10 @@ func SharedFolderToResponse(folder *models.SharedFolder, photoCount, userCount i
 	if folder == nil {
 		return nil
 	}
+
+	// Calculate webhook status
+	webhookStatus := calculateWebhookStatus(folder)
+
 	return &SharedFolderResponse{
 		ID:              folder.ID,
 		DriveFolderID:   folder.DriveFolderID,
@@ -58,5 +66,31 @@ func SharedFolderToResponse(folder *models.SharedFolder, photoCount, userCount i
 		PhotoCount:      photoCount,
 		UserCount:       userCount,
 		CreatedAt:       folder.CreatedAt,
+		WebhookStatus:   webhookStatus,
+		WebhookExpiry:   folder.WebhookExpiry,
 	}
+}
+
+// calculateWebhookStatus determines the webhook status based on expiry time
+func calculateWebhookStatus(folder *models.SharedFolder) string {
+	// No webhook registered
+	if folder.WebhookChannelID == "" || folder.WebhookExpiry == nil {
+		return "inactive"
+	}
+
+	now := time.Now()
+	expiry := *folder.WebhookExpiry
+
+	// Already expired
+	if expiry.Before(now) {
+		return "expired"
+	}
+
+	// Expiring soon (within 48 hours)
+	if expiry.Before(now.Add(48 * time.Hour)) {
+		return "expiring"
+	}
+
+	// Active and healthy
+	return "active"
 }

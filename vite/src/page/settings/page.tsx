@@ -18,6 +18,10 @@ import {
   X,
   Link,
   Plus,
+  Radio,
+  Clock,
+  AlertTriangle,
+  WifiOff,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -61,6 +65,54 @@ import {
 } from "@/features/folders"
 import { userService, type GeminiSettings } from "@/services/user"
 import type { DriveFolder, SharedFolder } from "@/shared/types"
+
+// Helper function to get webhook status display info
+function getWebhookStatusInfo(status: SharedFolder['webhook_status'], expiry: string | null) {
+  const expiryDate = expiry ? new Date(expiry) : null
+  const expiryText = expiryDate
+    ? `หมดอายุ ${expiryDate.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`
+    : ''
+
+  switch (status) {
+    case 'active':
+      return {
+        icon: Radio,
+        label: 'Webhook ทำงานปกติ',
+        description: expiryText,
+        className: 'text-green-600',
+        badgeVariant: 'outline' as const,
+        badgeClassName: 'text-green-600 border-green-600/30',
+      }
+    case 'expiring':
+      return {
+        icon: Clock,
+        label: 'Webhook ใกล้หมดอายุ',
+        description: expiryText,
+        className: 'text-yellow-600',
+        badgeVariant: 'outline' as const,
+        badgeClassName: 'text-yellow-600 border-yellow-600/30',
+      }
+    case 'expired':
+      return {
+        icon: AlertTriangle,
+        label: 'Webhook หมดอายุ',
+        description: 'รอ auto-renewal หรือกด Sync',
+        className: 'text-red-600',
+        badgeVariant: 'outline' as const,
+        badgeClassName: 'text-red-600 border-red-600/30',
+      }
+    case 'inactive':
+    default:
+      return {
+        icon: WifiOff,
+        label: 'Webhook ไม่ทำงาน',
+        description: 'กด Sync เพื่อลงทะเบียน',
+        className: 'text-muted-foreground',
+        badgeVariant: 'outline' as const,
+        badgeClassName: '',
+      }
+  }
+}
 
 export default function SettingsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -297,45 +349,57 @@ export default function SettingsPage() {
                         </div>
                       ) : sharedFolders.length > 0 ? (
                         <div className="space-y-2">
-                          {sharedFolders.map((folder: SharedFolder) => (
-                            <div key={folder.id} className="rounded-lg border p-3 space-y-2">
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                  <Folder className="h-4 w-4 text-yellow-500" />
-                                  <span className="text-sm font-medium">{folder.drive_folder_name}</span>
+                          {sharedFolders.map((folder: SharedFolder) => {
+                            const webhookInfo = getWebhookStatusInfo(folder.webhook_status, folder.webhook_expiry)
+                            const WebhookIcon = webhookInfo.icon
+                            return (
+                              <div key={folder.id} className="rounded-lg border p-3 space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <Folder className="h-4 w-4 text-yellow-500" />
+                                    <span className="text-sm font-medium">{folder.drive_folder_name}</span>
+                                  </div>
+                                  <Badge variant="secondary" className="text-xs">
+                                    {folder.sync_status === 'syncing' ? 'กำลัง Sync' :
+                                     folder.sync_status === 'completed' ? 'Sync แล้ว' :
+                                     folder.sync_status === 'failed' ? 'Sync ล้มเหลว' : 'รอ Sync'}
+                                  </Badge>
                                 </div>
-                                <Badge variant="secondary" className="text-xs">
-                                  {folder.sync_status === 'syncing' ? 'กำลัง Sync' :
-                                   folder.sync_status === 'completed' ? 'Sync แล้ว' :
-                                   folder.sync_status === 'failed' ? 'Sync ล้มเหลว' : 'รอ Sync'}
-                                </Badge>
-                              </div>
-                              <div className="flex items-center justify-between text-xs text-muted-foreground">
-                                <span>{folder.photo_count} รูป</span>
-                                <div className="flex items-center gap-1">
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-6 text-xs"
-                                    onClick={() => handleSyncFolder(folder.id)}
-                                    disabled={folder.sync_status === 'syncing' || triggerSyncMutation.isPending}
-                                  >
-                                    <RefreshCw className={`h-3 w-3 mr-1 ${folder.sync_status === 'syncing' ? 'animate-spin' : ''}`} />
-                                    Sync
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-6 text-xs text-destructive hover:text-destructive"
-                                    onClick={() => handleRemoveFolder(folder.id)}
-                                    disabled={removeFolderMutation.isPending}
-                                  >
-                                    <X className="h-3 w-3" />
-                                  </Button>
+                                {/* Webhook Status */}
+                                <div className="flex items-center gap-1.5 text-xs">
+                                  <WebhookIcon className={`h-3 w-3 ${webhookInfo.className}`} />
+                                  <span className={webhookInfo.className}>{webhookInfo.label}</span>
+                                  {webhookInfo.description && (
+                                    <span className="text-muted-foreground">• {webhookInfo.description}</span>
+                                  )}
+                                </div>
+                                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                                  <span>{folder.photo_count} รูป</span>
+                                  <div className="flex items-center gap-1">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-6 text-xs"
+                                      onClick={() => handleSyncFolder(folder.id)}
+                                      disabled={folder.sync_status === 'syncing' || triggerSyncMutation.isPending}
+                                    >
+                                      <RefreshCw className={`h-3 w-3 mr-1 ${folder.sync_status === 'syncing' ? 'animate-spin' : ''}`} />
+                                      Sync
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-6 text-xs text-destructive hover:text-destructive"
+                                      onClick={() => handleRemoveFolder(folder.id)}
+                                      disabled={removeFolderMutation.isPending}
+                                    >
+                                      <X className="h-3 w-3" />
+                                    </Button>
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          ))}
+                            )
+                          })}
                         </div>
                       ) : (
                         <p className="text-xs text-muted-foreground text-center py-4 flex items-center justify-center gap-1">

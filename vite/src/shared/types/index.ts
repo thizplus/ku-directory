@@ -166,6 +166,9 @@ export interface SharedFolder {
   user_count: number
   children?: SubFolderInfo[]
   created_at: string
+  // Webhook status
+  webhook_status: 'active' | 'expiring' | 'expired' | 'inactive'
+  webhook_expiry: string | null
 }
 
 export interface SharedFolderListData {
