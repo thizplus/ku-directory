@@ -1,11 +1,10 @@
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
 import { PhotoProvider, PhotoView } from "react-photo-view"
 import "react-photo-view/dist/react-photo-view.css"
 import {
   Images,
   Folder,
-  FolderOpen,
   RefreshCw,
   Loader2,
   AlertCircle,
@@ -25,10 +24,17 @@ import {
   List,
   Settings,
   Search,
+  MoreHorizontal,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -47,7 +53,6 @@ import {
 } from "@/features/folders"
 import { useFaceStats, useRetryFailedPhotos } from "@/features/face-search"
 import { useAuth } from "@/hooks/use-auth"
-import { useDownloadProgressStore } from "@/stores/download-progress"
 import { useSyncProgressStore } from "@/stores/sync-progress"
 import { getThumbnailUrl } from "@/shared/config/constants"
 import { cn } from "@/lib/utils"
@@ -63,11 +68,11 @@ interface BreadcrumbItem {
   path?: string
 }
 
-// Sub-folder info from API
-interface SubFolderInfo {
-  path: string
+// Computed subfolder for display
+interface ComputedSubfolder {
   name: string
-  photo_count: number
+  fullPath: string
+  photoCount: number
 }
 
 // Photo card component - Grid view
@@ -174,25 +179,10 @@ function PhotoCardList({
   const thumbnailUrl = token ? getThumbnailUrl(photo.drive_file_id, token, 100) : ""
   const fullSizeUrl = token ? getThumbnailUrl(photo.drive_file_id, token, 1600) : ""
 
-  const getStatusBadge = () => {
-    switch (photo.face_status) {
-      case "completed":
-        return <span className="text-xs text-green-600 flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> เสร็จแล้ว</span>
-      case "processing":
-        return <span className="text-xs text-blue-600 flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> กำลังประมวลผล</span>
-      case "pending":
-        return <span className="text-xs text-yellow-600 flex items-center gap-1"><Clock className="h-3 w-3" /> รอประมวลผล</span>
-      case "failed":
-        return <span className="text-xs text-red-600 flex items-center gap-1"><AlertCircle className="h-3 w-3" /> ล้มเหลว</span>
-      default:
-        return null
-    }
-  }
-
   return (
     <div className={cn(
-      "flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors group",
-      isSelected && "bg-primary/5 ring-1 ring-primary/20"
+      "flex items-center gap-3 px-2 py-1.5 rounded-md hover:bg-muted/50 transition-colors",
+      isSelected && "bg-muted"
     )}>
       <button
         className="flex-shrink-0"
@@ -202,20 +192,20 @@ function PhotoCardList({
         }}
       >
         <div className={cn(
-          "h-5 w-5 rounded border flex items-center justify-center transition-all",
+          "h-4 w-4 rounded border flex items-center justify-center transition-all",
           isSelected
             ? "bg-primary border-primary text-white"
-            : "border-gray-300 hover:border-primary"
+            : "border-muted-foreground/30 hover:border-primary"
         )}>
-          {isSelected && <Check className="h-3.5 w-3.5" strokeWidth={3} />}
+          {isSelected && <Check className="h-3 w-3" strokeWidth={3} />}
         </div>
       </button>
 
       <PhotoView src={fullSizeUrl}>
-        <div className="w-12 h-12 rounded overflow-hidden bg-muted flex-shrink-0 cursor-pointer">
+        <div className="w-8 h-8 rounded overflow-hidden bg-muted flex-shrink-0 cursor-pointer">
           {imageError || !token ? (
             <div className="w-full h-full flex items-center justify-center">
-              <ImageOff className="h-4 w-4 text-muted-foreground/50" />
+              <ImageOff className="h-3 w-3 text-muted-foreground/50" />
             </div>
           ) : (
             <img
@@ -229,23 +219,26 @@ function PhotoCardList({
         </div>
       </PhotoView>
 
-      <div className="flex-1 min-w-0">
-        <p className="text-sm truncate">{photo.file_name}</p>
-        <div className="flex items-center gap-3 mt-0.5">
-          {getStatusBadge()}
-          {photo.face_count > 0 && (
-            <span className="text-xs text-muted-foreground flex items-center gap-1">
-              <Users className="h-3 w-3" /> {photo.face_count} ใบหน้า
-            </span>
-          )}
-        </div>
-      </div>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="flex-1 text-sm truncate">{photo.file_name}</span>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>{photo.file_name}</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+
+      <span className="text-xs text-muted-foreground flex-shrink-0">
+        {photo.face_count > 0 && `${photo.face_count} ใบหน้า`}
+      </span>
     </div>
   )
 }
 
-// Folder card component - Grid view (Google Drive style)
-function FolderCardGrid({
+// Folder item - Grid view (shadcn style, minimal)
+function FolderItemGrid({
   name,
   photoCount,
   onClick,
@@ -255,25 +248,30 @@ function FolderCardGrid({
   onClick: () => void
 }) {
   return (
-    <button
-      className="group text-left w-full"
-      onClick={onClick}
-    >
-      <div className="aspect-[4/3] bg-gradient-to-br from-muted/80 to-muted rounded-xl border border-border/50 flex flex-col items-center justify-center gap-2 transition-all group-hover:border-primary/30 group-hover:shadow-md group-hover:scale-[1.02]">
-        <Folder className="h-12 w-12 md:h-16 md:w-16 text-yellow-500 drop-shadow-sm" />
-        <div className="text-center px-2">
-          <p className="text-sm font-medium truncate max-w-full" title={name}>
-            {name}
-          </p>
-          <p className="text-xs text-muted-foreground">{photoCount} รูป</p>
-        </div>
-      </div>
-    </button>
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            className="w-full flex flex-col items-center gap-2 p-4 rounded-lg border border-transparent hover:bg-muted/50 hover:border-border transition-colors"
+            onClick={onClick}
+          >
+            <Folder className="h-12 w-12 text-muted-foreground" />
+            <div className="text-center w-full">
+              <p className="text-sm truncate">{name}</p>
+              <p className="text-xs text-muted-foreground">{photoCount} รูป</p>
+            </div>
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>{name}</p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   )
 }
 
-// Folder card component - List view
-function FolderCardList({
+// Folder item - List view (shadcn style, minimal)
+function FolderItemList({
   name,
   photoCount,
   onClick,
@@ -283,17 +281,23 @@ function FolderCardList({
   onClick: () => void
 }) {
   return (
-    <button
-      className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors text-left"
-      onClick={onClick}
-    >
-      <Folder className="h-10 w-10 text-yellow-500 flex-shrink-0" />
-      <div className="flex-1 min-w-0">
-        <p className="text-sm truncate font-medium">{name}</p>
-        <p className="text-xs text-muted-foreground">{photoCount} รูป</p>
-      </div>
-      <ChevronRight className="h-4 w-4 text-muted-foreground" />
-    </button>
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            className="w-full flex items-center gap-3 px-2 py-1.5 rounded-md hover:bg-muted/50 transition-colors text-left"
+            onClick={onClick}
+          >
+            <Folder className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+            <span className="flex-1 text-sm truncate">{name}</span>
+            <span className="text-xs text-muted-foreground flex-shrink-0">{photoCount} รูป</span>
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>{name}</p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   )
 }
 
@@ -304,7 +308,7 @@ export default function GalleryPage() {
 
   // State
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
-    return (localStorage.getItem("gallery-view-mode") as ViewMode) || "grid"
+    return (localStorage.getItem("gallery-view-mode") as ViewMode) || "list"
   })
   const [selectedFolderId, setSelectedFolderId] = useState<string | undefined>()
   const [currentPath, setCurrentPath] = useState<string | undefined>()
@@ -314,7 +318,6 @@ export default function GalleryPage() {
   const limit = viewMode === "grid" ? 24 : 50
 
   // Stores
-  const downloadProgress = useDownloadProgressStore((state) => state.progress)
   const syncProgressMap = useSyncProgressStore((state) => state.progress)
 
   // Queries
@@ -352,8 +355,6 @@ export default function GalleryPage() {
     }
   }, [])
 
-  // Don't auto-select - let user navigate like Google Drive
-
   // Build breadcrumbs
   useEffect(() => {
     if (!selectedFolderId) {
@@ -371,13 +372,13 @@ export default function GalleryPage() {
     if (currentPath) {
       const pathParts = currentPath.split("/").filter(Boolean)
       // Skip the first part (root folder name)
-      let buildPath = ""
+      let buildPath = folder.drive_folder_name
       for (let i = 1; i < pathParts.length; i++) {
-        buildPath = buildPath ? `${buildPath}/${pathParts[i]}` : pathParts[i]
+        buildPath = `${buildPath}/${pathParts[i]}`
         crumbs.push({
           id: folder.id,
           name: pathParts[i],
-          path: `${folder.drive_folder_name}/${buildPath}`
+          path: buildPath
         })
       }
     }
@@ -385,32 +386,52 @@ export default function GalleryPage() {
     setBreadcrumbs(crumbs)
   }, [selectedFolderId, currentPath, sharedFolders])
 
-  // Get current folder's subfolders
-  const getCurrentSubfolders = useCallback((): SubFolderInfo[] => {
+  // Compute subfolders at current level - handles nested paths correctly
+  const subfolders = useMemo((): ComputedSubfolder[] => {
     if (!selectedFolderId) return []
 
     const folder = sharedFolders.find(f => f.id === selectedFolderId)
-    if (!folder?.children) return []
+    if (!folder?.children || folder.children.length === 0) return []
 
-    // Filter subfolders at current level
-    const currentPrefix = currentPath ? `${currentPath}/` : `${folder.drive_folder_name}/`
+    const rootName = folder.drive_folder_name
+    const currentPrefix = currentPath || rootName
 
-    return folder.children.filter(child => {
-      // Must start with current path
-      if (!child.path.startsWith(currentPrefix.slice(0, -1))) return false
+    // Group by first segment after current prefix
+    const folderMap = new Map<string, ComputedSubfolder>()
 
-      // Get the remaining path after current prefix
+    folder.children.forEach(child => {
+      // child.path example: "KU TEST/2568/งานกิจกรรมที่ 1"
+      if (!child.path.startsWith(currentPrefix)) return
+
+      // Get remaining path after current prefix
       const remaining = child.path.slice(currentPrefix.length)
+      // remaining example: "/2568/งานกิจกรรมที่ 1" or "" if exact match
 
-      // Only direct children (no more slashes)
-      return remaining && !remaining.includes("/")
-    }).map(child => ({
-      ...child,
-      name: child.path.split("/").pop() || child.name
-    }))
+      if (!remaining || remaining === "/") return // Exact match, no subfolder
+
+      // Remove leading slash and get first segment
+      const withoutLeadingSlash = remaining.startsWith("/") ? remaining.slice(1) : remaining
+      const firstSegment = withoutLeadingSlash.split("/")[0]
+
+      if (!firstSegment) return
+
+      const fullPath = `${currentPrefix}/${firstSegment}`
+
+      // Aggregate photo counts for same subfolder
+      if (folderMap.has(firstSegment)) {
+        const existing = folderMap.get(firstSegment)!
+        existing.photoCount += child.photo_count
+      } else {
+        folderMap.set(firstSegment, {
+          name: firstSegment,
+          fullPath,
+          photoCount: child.photo_count
+        })
+      }
+    })
+
+    return Array.from(folderMap.values()).sort((a, b) => a.name.localeCompare(b.name))
   }, [selectedFolderId, currentPath, sharedFolders])
-
-  const subfolders = getCurrentSubfolders()
 
   // Navigation handlers
   const handleFolderSelect = (folderId: string) => {
@@ -421,13 +442,13 @@ export default function GalleryPage() {
     setSearchParams({ folder: folderId }, { replace: true })
   }
 
-  const handleSubfolderClick = (subfolder: SubFolderInfo) => {
-    setCurrentPath(subfolder.path)
+  const handleSubfolderClick = (subfolder: ComputedSubfolder) => {
+    setCurrentPath(subfolder.fullPath)
     setPage(1)
     setSelectedPhotos(new Set())
     setSearchParams({
       folder: selectedFolderId!,
-      path: subfolder.path
+      path: subfolder.fullPath
     }, { replace: true })
   }
 
@@ -499,64 +520,54 @@ export default function GalleryPage() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-semibold">คลังรูปภาพ</h1>
-          <p className="text-sm text-muted-foreground">จัดการรูปภาพกิจกรรมทั้งหมด</p>
+          <h1 className="text-xl font-medium">คลังรูปภาพ</h1>
         </div>
 
-        <div className="py-12 text-center">
-          <Images className="mx-auto h-10 w-10 text-muted-foreground/50" />
+        <div className="py-16 text-center">
+          <Images className="mx-auto h-12 w-12 text-muted-foreground/30" />
           <p className="mt-4 text-sm text-muted-foreground">
             {!driveStatus?.connected
               ? "ยังไม่ได้เชื่อมต่อ Google Drive"
-              : "ยังไม่มีโฟลเดอร์ กรุณาเพิ่มโฟลเดอร์ที่ต้องการ Sync"}
+              : "ยังไม่มีโฟลเดอร์"}
           </p>
-          <Button className="mt-4" size="sm" onClick={() => navigate("/settings")}>
+          <Button variant="outline" className="mt-4" onClick={() => navigate("/settings")}>
             ไปที่ตั้งค่า
-            <ArrowRight className="h-3 w-3 ml-1" />
+            <ArrowRight className="h-4 w-4 ml-2" />
           </Button>
         </div>
       </div>
     )
   }
 
-  // Home view - show all shared folders (Google Drive style)
+  // Home view - show all shared folders
   if (!selectedFolderId) {
     return (
-      <div className="space-y-6">
-        {/* Header - Google Drive style */}
+      <div className="space-y-4">
+        {/* Header */}
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Home className="h-6 w-6 text-muted-foreground" />
-            <div>
-              <h1 className="text-xl font-semibold">โฟลเดอร์ทั้งหมด</h1>
-              <p className="text-xs text-muted-foreground">
-                {sharedFolders.length} โฟลเดอร์ • {stats?.total_photos || 0} รูปภาพ • {stats?.total_faces || 0} ใบหน้า
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            {/* View toggle */}
-            <div className="flex items-center border rounded-lg overflow-hidden">
-              <button
-                onClick={() => setViewMode("grid")}
-                className={cn(
-                  "p-2 transition-colors",
-                  viewMode === "grid" ? "bg-primary text-primary-foreground" : "hover:bg-muted"
-                )}
-              >
-                <LayoutGrid className="h-4 w-4" />
-              </button>
+          <h1 className="text-xl font-medium">โฟลเดอร์ทั้งหมด</h1>
+          <div className="flex items-center gap-1">
+            <div className="flex items-center border rounded-md">
               <button
                 onClick={() => setViewMode("list")}
                 className={cn(
-                  "p-2 transition-colors",
-                  viewMode === "list" ? "bg-primary text-primary-foreground" : "hover:bg-muted"
+                  "p-1.5 rounded-l-md transition-colors",
+                  viewMode === "list" ? "bg-muted" : "hover:bg-muted/50"
                 )}
               >
                 <List className="h-4 w-4" />
               </button>
+              <button
+                onClick={() => setViewMode("grid")}
+                className={cn(
+                  "p-1.5 rounded-r-md transition-colors",
+                  viewMode === "grid" ? "bg-muted" : "hover:bg-muted/50"
+                )}
+              >
+                <LayoutGrid className="h-4 w-4" />
+              </button>
             </div>
-            <Button variant="outline" size="sm" onClick={() => navigate("/settings")}>
+            <Button variant="ghost" size="icon" onClick={() => navigate("/settings")}>
               <Settings className="h-4 w-4" />
             </Button>
           </div>
@@ -564,33 +575,25 @@ export default function GalleryPage() {
 
         <Separator />
 
-        {/* Folders - Google Drive style grid */}
+        {/* Folders */}
         {foldersLoading ? (
-          <div className={cn(
-            "gap-4",
-            viewMode === "grid"
-              ? "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
-              : "space-y-2"
-          )}>
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className={cn(
-                "bg-muted rounded-xl animate-pulse",
-                viewMode === "grid" ? "aspect-[4/3]" : "h-14"
-              )} />
+          <div className="space-y-1">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="h-10 bg-muted rounded-md animate-pulse" />
             ))}
           </div>
         ) : sharedFolders.length === 0 ? (
           <div className="py-16 text-center">
-            <Folder className="mx-auto h-16 w-16 text-muted-foreground/30" />
-            <p className="mt-4 text-muted-foreground">ยังไม่มีโฟลเดอร์</p>
-            <Button className="mt-4" onClick={() => navigate("/settings")}>
+            <Folder className="mx-auto h-12 w-12 text-muted-foreground/30" />
+            <p className="mt-4 text-sm text-muted-foreground">ยังไม่มีโฟลเดอร์</p>
+            <Button variant="outline" className="mt-4" onClick={() => navigate("/settings")}>
               เพิ่มโฟลเดอร์
             </Button>
           </div>
         ) : viewMode === "grid" ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
             {sharedFolders.map(folder => (
-              <FolderCardGrid
+              <FolderItemGrid
                 key={folder.id}
                 name={folder.drive_folder_name}
                 photoCount={folder.photo_count}
@@ -599,9 +602,9 @@ export default function GalleryPage() {
             ))}
           </div>
         ) : (
-          <div className="space-y-1">
+          <div className="space-y-0.5">
             {sharedFolders.map(folder => (
-              <FolderCardList
+              <FolderItemList
                 key={folder.id}
                 name={folder.drive_folder_name}
                 photoCount={folder.photo_count}
@@ -611,39 +614,26 @@ export default function GalleryPage() {
           </div>
         )}
 
-        {/* Quick Stats - moved to bottom */}
+        {/* Stats footer */}
         <Separator />
-        <div className="flex items-center justify-center gap-8 text-sm text-muted-foreground py-2">
-          <span className="flex items-center gap-1.5">
-            <Images className="h-4 w-4" />
-            {stats?.total_photos || 0} รูป
-          </span>
-          <span className="flex items-center gap-1.5">
-            <CheckCircle2 className="h-4 w-4 text-green-500" />
-            {stats?.processed_photos || 0} ประมวลผลแล้ว
-          </span>
-          <span className="flex items-center gap-1.5">
-            <Clock className="h-4 w-4 text-yellow-500" />
-            {stats?.pending_photos || 0} รอดำเนินการ
-          </span>
-          <span className="flex items-center gap-1.5">
-            <Users className="h-4 w-4 text-primary" />
-            {stats?.total_faces || 0} ใบหน้า
-          </span>
+        <div className="flex items-center justify-center gap-6 text-xs text-muted-foreground">
+          <span>{stats?.total_photos || 0} รูป</span>
+          <span>{stats?.processed_photos || 0} ประมวลผลแล้ว</span>
+          <span>{stats?.total_faces || 0} ใบหน้า</span>
         </div>
       </div>
     )
   }
 
-  // Folder view - show contents
+  // Folder view
   return (
     <div className="space-y-4">
       {/* Breadcrumb & Actions */}
       <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-1 text-sm min-w-0 overflow-hidden">
+        <div className="flex items-center gap-1 text-sm min-w-0">
           <button
             onClick={handleHomeClick}
-            className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
+            className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
           >
             <Home className="h-4 w-4" />
           </button>
@@ -651,7 +641,7 @@ export default function GalleryPage() {
             <div key={`${crumb.id}-${crumb.path || 'root'}`} className="flex items-center gap-1 min-w-0">
               <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
               {idx === breadcrumbs.length - 1 ? (
-                <span className="font-medium truncate">{crumb.name}</span>
+                <span className="truncate">{crumb.name}</span>
               ) : (
                 <button
                   onClick={() => handleBreadcrumbClick(crumb)}
@@ -664,76 +654,70 @@ export default function GalleryPage() {
           ))}
         </div>
 
-        <div className="flex items-center gap-2 flex-shrink-0">
-          {/* Selected actions */}
+        <div className="flex items-center gap-1 flex-shrink-0">
           {someSelected && (
             <>
               <Button
                 size="sm"
-                variant="outline"
+                variant="ghost"
                 onClick={() => {
                   const selectedPhotoData = photos.filter(p => selectedPhotos.has(p.drive_file_id))
                   sessionStorage.setItem('newsWriterPhotos', JSON.stringify(selectedPhotoData))
                   navigate('/news-writer')
                 }}
               >
-                <Newspaper className="h-4 w-4 mr-1" />
-                เขียนข่าว ({selectedPhotos.size})
+                <Newspaper className="h-4 w-4" />
               </Button>
               <Button
                 size="sm"
-                variant="outline"
+                variant="ghost"
                 onClick={handleDownload}
                 disabled={downloadMutation.isPending}
               >
                 {downloadMutation.isPending ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                    {downloadProgress ? `${downloadProgress.current}/${downloadProgress.total}` : '...'}
-                  </>
+                  <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
-                  <>
-                    <Download className="h-4 w-4 mr-1" />
-                    ดาวน์โหลด ({selectedPhotos.size})
-                  </>
+                  <Download className="h-4 w-4" />
                 )}
               </Button>
+              <Separator orientation="vertical" className="h-4" />
             </>
           )}
 
-          {/* View toggle */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setViewMode(viewMode === "grid" ? "list" : "grid")}
-          >
-            {viewMode === "grid" ? <List className="h-4 w-4" /> : <LayoutGrid className="h-4 w-4" />}
-          </Button>
+          <div className="flex items-center border rounded-md">
+            <button
+              onClick={() => setViewMode("list")}
+              className={cn(
+                "p-1.5 rounded-l-md transition-colors",
+                viewMode === "list" ? "bg-muted" : "hover:bg-muted/50"
+              )}
+            >
+              <List className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => setViewMode("grid")}
+              className={cn(
+                "p-1.5 rounded-r-md transition-colors",
+                viewMode === "grid" ? "bg-muted" : "hover:bg-muted/50"
+              )}
+            >
+              <LayoutGrid className="h-4 w-4" />
+            </button>
+          </div>
 
-          {/* Sync button */}
           <Button
             size="sm"
+            variant="ghost"
             onClick={() => triggerSyncMutation.mutate(selectedFolderId)}
             disabled={isSyncing || triggerSyncMutation.isPending}
           >
-            {isSyncing ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                {syncProgress ? `${syncProgress.percent}%` : 'Sync...'}
-              </>
-            ) : (
-              <>
-                <RefreshCw className="h-4 w-4 mr-1" />
-                Sync
-              </>
-            )}
+            <RefreshCw className={cn("h-4 w-4", isSyncing && "animate-spin")} />
           </Button>
 
-          {/* More actions */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
-                <Settings className="h-4 w-4" />
+              <Button variant="ghost" size="sm">
+                <MoreHorizontal className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
@@ -742,17 +726,16 @@ export default function GalleryPage() {
                 ค้นหาใบหน้า
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => navigate("/settings")}>
-                <FolderOpen className="h-4 w-4 mr-2" />
+                <Settings className="h-4 w-4 mr-2" />
                 จัดการโฟลเดอร์
               </DropdownMenuItem>
               {(stats?.failed_photos || 0) > 0 && (
                 <DropdownMenuItem
                   onClick={() => retryFailedMutation.mutate(undefined)}
                   disabled={retryFailedMutation.isPending}
-                  className="text-destructive"
                 >
                   <RotateCcw className="h-4 w-4 mr-2" />
-                  Retry ล้มเหลว ({stats?.failed_photos})
+                  Retry ({stats?.failed_photos})
                 </DropdownMenuItem>
               )}
             </DropdownMenuContent>
@@ -764,89 +747,82 @@ export default function GalleryPage() {
 
       {/* Content */}
       {photosLoading ? (
-        <div className={cn(
-          "gap-3",
-          viewMode === "grid"
-            ? "grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6"
-            : "space-y-1"
-        )}>
-          {Array.from({ length: 18 }).map((_, i) => (
-            <div key={i} className={cn(
-              "bg-muted rounded-lg animate-pulse",
-              viewMode === "grid" ? "aspect-square" : "h-16"
-            )} />
+        <div className="space-y-1">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="h-10 bg-muted rounded-md animate-pulse" />
           ))}
         </div>
       ) : (
-        <div className="space-y-4">
-          {/* Select all / info */}
-          {photos.length > 0 && (
-            <div className="flex items-center justify-between text-sm">
-              <button
-                onClick={toggleSelectAll}
-                className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <div className={cn(
-                  "h-4 w-4 rounded border flex items-center justify-center",
-                  allSelected ? "bg-primary border-primary text-white" : "border-gray-300"
-                )}>
-                  {allSelected && <Check className="h-3 w-3" strokeWidth={3} />}
-                </div>
-                เลือกทั้งหมด
-              </button>
-              <span className="text-muted-foreground">
-                {photosData?.total || 0} รูป {subfolders.length > 0 && `| ${subfolders.length} โฟลเดอร์`}
-                {totalPages > 1 && ` | หน้า ${page}/${totalPages}`}
+        <div className="space-y-2">
+          {/* Info bar */}
+          {(subfolders.length > 0 || photos.length > 0) && (
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <div className="flex items-center gap-2">
+                {photos.length > 0 && (
+                  <button
+                    onClick={toggleSelectAll}
+                    className="flex items-center gap-1.5 hover:text-foreground transition-colors"
+                  >
+                    <div className={cn(
+                      "h-3.5 w-3.5 rounded border flex items-center justify-center",
+                      allSelected ? "bg-primary border-primary text-white" : "border-muted-foreground/30"
+                    )}>
+                      {allSelected && <Check className="h-2.5 w-2.5" strokeWidth={3} />}
+                    </div>
+                    เลือกทั้งหมด
+                  </button>
+                )}
+                {someSelected && (
+                  <span className="text-primary">{selectedPhotos.size} รายการ</span>
+                )}
+              </div>
+              <span>
+                {subfolders.length > 0 && `${subfolders.length} โฟลเดอร์`}
+                {subfolders.length > 0 && photos.length > 0 && " • "}
+                {photos.length > 0 && `${photosData?.total || 0} รูป`}
+                {totalPages > 1 && ` • หน้า ${page}/${totalPages}`}
               </span>
             </div>
           )}
 
           {/* Subfolders */}
           {subfolders.length > 0 && (
-            <div className={cn(
-              viewMode === "grid"
-                ? "grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3"
-                : "space-y-1"
-            )}>
-              {subfolders.map(subfolder => (
-                viewMode === "grid" ? (
-                  <FolderCardGrid
-                    key={subfolder.path}
+            viewMode === "grid" ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                {subfolders.map(subfolder => (
+                  <FolderItemGrid
+                    key={subfolder.fullPath}
                     name={subfolder.name}
-                    photoCount={subfolder.photo_count}
+                    photoCount={subfolder.photoCount}
                     onClick={() => handleSubfolderClick(subfolder)}
                   />
-                ) : (
-                  <FolderCardList
-                    key={subfolder.path}
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-0.5">
+                {subfolders.map(subfolder => (
+                  <FolderItemList
+                    key={subfolder.fullPath}
                     name={subfolder.name}
-                    photoCount={subfolder.photo_count}
+                    photoCount={subfolder.photoCount}
                     onClick={() => handleSubfolderClick(subfolder)}
                   />
-                )
-              ))}
-            </div>
+                ))}
+              </div>
+            )
+          )}
+
+          {/* Separator between folders and photos */}
+          {subfolders.length > 0 && photos.length > 0 && (
+            <Separator className="my-2" />
           )}
 
           {/* Photos */}
           {photos.length > 0 ? (
-            <PhotoProvider
-              maskOpacity={0.9}
-              toolbarRender={({ onScale, scale }) => (
-                <div className="flex items-center gap-2">
-                  <button className="p-2 text-white/80 hover:text-white" onClick={() => onScale(scale + 0.5)}>
-                    <ZoomIn className="h-5 w-5" />
-                  </button>
-                </div>
-              )}
-            >
-              <div className={cn(
-                viewMode === "grid"
-                  ? "grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3"
-                  : "space-y-1"
-              )}>
-                {photos.map(photo => (
-                  viewMode === "grid" ? (
+            <PhotoProvider maskOpacity={0.9}>
+              {viewMode === "grid" ? (
+                <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                  {photos.map(photo => (
                     <PhotoCardGrid
                       key={photo.id}
                       photo={photo}
@@ -854,7 +830,11 @@ export default function GalleryPage() {
                       isSelected={selectedPhotos.has(photo.drive_file_id)}
                       onToggleSelect={() => togglePhotoSelection(photo.drive_file_id)}
                     />
-                  ) : (
+                  ))}
+                </div>
+              ) : (
+                <div className="space-y-0.5">
+                  {photos.map(photo => (
                     <PhotoCardList
                       key={photo.id}
                       photo={photo}
@@ -862,16 +842,14 @@ export default function GalleryPage() {
                       isSelected={selectedPhotos.has(photo.drive_file_id)}
                       onToggleSelect={() => togglePhotoSelection(photo.drive_file_id)}
                     />
-                  )
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </PhotoProvider>
           ) : subfolders.length === 0 && (
-            <div className="py-12 text-center">
-              <Images className="mx-auto h-10 w-10 text-muted-foreground/50" />
-              <p className="mt-4 text-sm text-muted-foreground">
-                ไม่พบรูปภาพในโฟลเดอร์นี้
-              </p>
+            <div className="py-16 text-center">
+              <Images className="mx-auto h-12 w-12 text-muted-foreground/30" />
+              <p className="mt-4 text-sm text-muted-foreground">ไม่พบรูปภาพ</p>
             </div>
           )}
 
@@ -886,8 +864,8 @@ export default function GalleryPage() {
               >
                 ก่อนหน้า
               </Button>
-              <span className="text-sm text-muted-foreground px-4">
-                หน้า {page} / {totalPages}
+              <span className="text-sm text-muted-foreground">
+                {page} / {totalPages}
               </span>
               <Button
                 variant="outline"
