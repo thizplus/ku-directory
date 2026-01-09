@@ -333,8 +333,8 @@ func truncateString(s string, maxLen int) string {
 
 // updateFolderMetadata fetches and updates folder metadata (name, description) from Google Drive
 func (w *SyncWorker) updateFolderMetadata(ctx context.Context, folder *models.SharedFolder, srv *drive.Service) {
-	// Fetch folder metadata from Google Drive
-	folderMeta, err := srv.Files.Get(folder.DriveFolderID).Fields("id, name, description").Do()
+	// Fetch folder metadata from Google Drive (SupportsAllDrives for shared drives)
+	folderMeta, err := srv.Files.Get(folder.DriveFolderID).Fields("id, name, description").SupportsAllDrives(true).Do()
 	if err != nil {
 		logger.SyncError("fetch_folder_metadata_failed", "Failed to fetch folder metadata", err, map[string]interface{}{
 			"folder_id":       folder.ID.String(),
