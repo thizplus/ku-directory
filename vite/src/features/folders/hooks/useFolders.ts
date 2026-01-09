@@ -181,3 +181,29 @@ export function useSubFolders(folderId: string, enabled = true) {
     staleTime: CACHE_TIMES.DEFAULT,
   })
 }
+
+/**
+ * Reconnect Google Drive to a folder
+ */
+export function useReconnectFolder() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (folderId: string) => {
+      const response = await foldersService.reconnectFolder(folderId)
+      if (!response.success) {
+        throw new Error(response.message)
+      }
+      return folderId
+    },
+    onSuccess: (folderId) => {
+      queryClient.invalidateQueries({ queryKey: foldersKeys.detail(folderId) })
+      queryClient.invalidateQueries({ queryKey: foldersKeys.list() })
+      toast.success('เชื่อมต่อ Google Drive สำเร็จ')
+    },
+    onError: (error) => {
+      if (isGoogleTokenError(error)) return
+      toast.error(`เชื่อมต่อไม่สำเร็จ: ${getErrorMessage(error)}`)
+    },
+  })
+}

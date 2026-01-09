@@ -94,6 +94,14 @@ async function getSubFolders(folderId: string): Promise<ApiResponse<SubFoldersDa
   return response.data
 }
 
+/**
+ * Reconnect Google Drive to a folder (refresh tokens)
+ */
+async function reconnectFolder(folderId: string): Promise<ApiResponse<null>> {
+  const response = await apiClient.post<ApiResponse<null>>(`${FOLDERS_API.GET(folderId)}/reconnect`)
+  return response.data
+}
+
 export const foldersService = {
   listFolders,
   getFolder,
@@ -102,4 +110,5 @@ export const foldersService = {
   triggerSync,
   getPhotos,
   getSubFolders,
+  reconnectFolder,
 }

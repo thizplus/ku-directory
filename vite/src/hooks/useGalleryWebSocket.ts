@@ -5,6 +5,7 @@
  */
 import { useEffect, useRef, useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
 import { useAuth } from './use-auth'
 import { driveKeys } from '@/features/drive'
 import { foldersKeys } from '@/features/folders'
@@ -115,6 +116,23 @@ export function useGalleryWebSocket() {
           // Download completed (server finished creating zip)
           // Toast is handled in the mutation onSuccess after file is saved
           setDownloadCompleted()
+          break
+
+        case 'folder:token_expired':
+          // Google token expired - show error and prompt to reconnect
+          {
+            const folderName = message.data.folderName as string
+            toast.error(`โฟลเดอร์ "${folderName}" ต้องการเชื่อมต่อ Google ใหม่`, {
+              description: 'กรุณาไปที่ Settings แล้วกด Reconnect',
+              duration: 10000,
+              action: {
+                label: 'ไปที่ Settings',
+                onClick: () => window.location.href = '/settings',
+              },
+            })
+            // Invalidate folders to show error status
+            queryClient.invalidateQueries({ queryKey: foldersKeys.all })
+          }
           break
 
         default:

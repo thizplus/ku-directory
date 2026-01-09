@@ -265,6 +265,26 @@ func (w *SyncWorker) processJob(job models.SyncJob) {
 			"job_id":    jobID.String(),
 			"folder_id": folder.ID.String(),
 		})
+
+		// Check if it's a token error and notify users
+		errStr := err.Error()
+		isTokenError := strings.Contains(errStr, "401") ||
+			strings.Contains(errStr, "Invalid Credentials") ||
+			strings.Contains(errStr, "token") ||
+			strings.Contains(errStr, "oauth")
+
+		if isTokenError {
+			// Broadcast token error to all users with access to this folder
+			w.broadcastToFolderUsers(ctx, folder.ID, "folder:token_expired", map[string]interface{}{
+				"folderId":   folder.ID.String(),
+				"folderName": folder.DriveFolderName,
+				"message":    "Google Drive token หมดอายุ กรุณา Reconnect",
+			})
+
+			// Update folder status with error
+			w.sharedFolderRepo.UpdateSyncStatus(ctx, folder.ID, models.SyncStatusError, "Google token expired - please reconnect")
+		}
+
 		w.failJob(ctx, jobID, &folder.ID, fmt.Sprintf("Failed to get drive service: %v", err))
 		return
 	}
