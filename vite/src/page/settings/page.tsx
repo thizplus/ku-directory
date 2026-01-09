@@ -183,7 +183,7 @@ export default function SettingsPage() {
 
   const handleSyncFolder = async (folderId: string) => {
     try {
-      await triggerSyncMutation.mutateAsync(folderId)
+      await triggerSyncMutation.mutateAsync({ folderId })
     } catch {
       // Error handled in mutation
     }
