@@ -127,17 +127,17 @@ export function useTriggerFolderSync() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async (folderId: string) => {
-      const response = await foldersService.triggerSync(folderId)
+    mutationFn: async ({ folderId, force = false }: { folderId: string; force?: boolean }) => {
+      const response = await foldersService.triggerSync(folderId, force)
       if (!response.success) {
         throw new Error(response.message)
       }
-      return folderId
+      return { folderId, force }
     },
-    onSuccess: (folderId) => {
+    onSuccess: ({ folderId, force }) => {
       queryClient.invalidateQueries({ queryKey: foldersKeys.detail(folderId) })
       queryClient.invalidateQueries({ queryKey: foldersKeys.list() })
-      toast.success('เริ่ม Sync โฟลเดอร์แล้ว')
+      toast.success(force ? 'เริ่ม Full Sync โฟลเดอร์แล้ว' : 'เริ่ม Sync โฟลเดอร์แล้ว')
     },
     onError: (error) => {
       if (isGoogleTokenError(error)) return

@@ -43,9 +43,11 @@ async function removeFolder(folderId: string): Promise<ApiResponse<null>> {
 
 /**
  * Trigger sync for a folder
+ * @param force - If true, forces a full re-sync of all photos
  */
-async function triggerSync(folderId: string): Promise<ApiResponse<null>> {
-  const response = await apiClient.post<ApiResponse<null>>(FOLDERS_API.SYNC(folderId))
+async function triggerSync(folderId: string, force = false): Promise<ApiResponse<null>> {
+  const url = force ? `${FOLDERS_API.SYNC(folderId)}?force=true` : FOLDERS_API.SYNC(folderId)
+  const response = await apiClient.post<ApiResponse<null>>(url)
   return response.data
 }
 

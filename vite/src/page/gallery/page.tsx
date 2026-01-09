@@ -893,8 +893,9 @@ export default function GalleryPage() {
           <Button
             size="sm"
             variant="ghost"
-            onClick={() => triggerSyncMutation.mutate(selectedFolderId)}
+            onClick={() => triggerSyncMutation.mutate({ folderId: selectedFolderId })}
             disabled={isSyncing || triggerSyncMutation.isPending}
+            title="Sync"
           >
             <RefreshCw className={cn("h-4 w-4", isSyncing && "animate-spin")} />
           </Button>
@@ -913,6 +914,13 @@ export default function GalleryPage() {
               <DropdownMenuItem onClick={() => navigate("/settings")}>
                 <Settings className="h-4 w-4 mr-2" />
                 จัดการโฟลเดอร์
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => triggerSyncMutation.mutate({ folderId: selectedFolderId, force: true })}
+                disabled={isSyncing || triggerSyncMutation.isPending}
+              >
+                <RotateCcw className="h-4 w-4 mr-2" />
+                Force Full Sync
               </DropdownMenuItem>
               {(stats?.failed_photos || 0) > 0 && (
                 <DropdownMenuItem
