@@ -455,6 +455,17 @@ export default function GalleryPage() {
     return Array.from(folderMap.values()).sort((a, b) => a.name.localeCompare(b.name))
   }, [selectedFolderId, currentPath, sharedFolders])
 
+  // Compute the folder path to filter photos by
+  // At root level, use drive_folder_name (e.g., "KU TEST")
+  // In subfolders, use currentPath (e.g., "KU TEST/2566")
+  const folderPathFilter = useMemo(() => {
+    if (!selectedFolderId) return undefined
+    if (currentPath) return currentPath
+    // At root level, use the folder's drive_folder_name to only show photos at root
+    const folder = sharedFolders.find(f => f.id === selectedFolderId)
+    return folder?.drive_folder_name
+  }, [selectedFolderId, currentPath, sharedFolders])
+
   // Only fetch photos when:
   // 1. We have a selected folder AND
   // 2. Either we have a currentPath (inside a subfolder) OR there are no subfolders at this level
@@ -466,7 +477,7 @@ export default function GalleryPage() {
     limit,
     undefined,
     shouldFetchPhotos,
-    currentPath
+    folderPathFilter
   )
   const { data: stats, isLoading: statsLoading } = useFaceStats()
 
