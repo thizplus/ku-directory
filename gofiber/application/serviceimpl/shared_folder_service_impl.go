@@ -673,9 +673,11 @@ func (s *SharedFolderServiceImpl) HandleWebhook(ctx context.Context, channelID, 
 		"folder_name": folder.DriveFolderName,
 	})
 
-	// If it's a sync or change event, trigger sync for this folder
-	if resourceState == "sync" || resourceState == "change" {
-		logger.Webhook("shared_folder_trigger_sync", "Triggering sync for shared folder", map[string]interface{}{
+	// Only trigger sync for "change" events, NOT "sync" events
+	// "sync" is just Google's test notification when webhook is registered
+	// "change" is the actual notification when files/folders change
+	if resourceState == "change" {
+		logger.Webhook("shared_folder_trigger_sync", "Triggering sync for shared folder (change event)", map[string]interface{}{
 			"folder_id":      folder.ID.String(),
 			"resource_state": resourceState,
 		})
@@ -690,8 +692,15 @@ func (s *SharedFolderServiceImpl) HandleWebhook(ctx context.Context, channelID, 
 		logger.Webhook("shared_folder_sync_triggered", "Sync triggered successfully for shared folder", map[string]interface{}{
 			"folder_id": folder.ID.String(),
 		})
+	} else if resourceState == "sync" {
+		// "sync" is just Google testing if our endpoint works - no action needed
+		logger.Webhook("shared_folder_webhook_sync_ack", "Received sync acknowledgment (no action)", map[string]interface{}{
+			"folder_id":      folder.ID.String(),
+			"resource_state": resourceState,
+		})
 	} else {
-		logger.Webhook("shared_folder_webhook_ignored", "Ignoring webhook with state", map[string]interface{}{
+		logger.Webhook("shared_folder_webhook_ignored", "Ignoring webhook with unknown state", map[string]interface{}{
+			"folder_id":      folder.ID.String(),
 			"resource_state": resourceState,
 		})
 	}

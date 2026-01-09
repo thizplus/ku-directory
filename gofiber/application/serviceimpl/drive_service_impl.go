@@ -568,9 +568,11 @@ func (s *DriveServiceImpl) HandleWebhook(ctx context.Context, channelID, resourc
 		"user_id": user.ID.String(),
 	})
 
-	// If it's a sync or change event, trigger incremental sync
-	if resourceState == "sync" || resourceState == "change" {
-		logger.Webhook("webhook_trigger_sync", "Triggering sync due to webhook event", map[string]interface{}{
+	// Only trigger sync for "change" events, NOT "sync" events
+	// "sync" is just Google's test notification when webhook is registered
+	// "change" is the actual notification when files/folders change
+	if resourceState == "change" {
+		logger.Webhook("webhook_trigger_sync", "Triggering sync due to change event", map[string]interface{}{
 			"user_id":        user.ID.String(),
 			"resource_state": resourceState,
 		})
@@ -584,8 +586,15 @@ func (s *DriveServiceImpl) HandleWebhook(ctx context.Context, channelID, resourc
 		logger.Webhook("webhook_sync_triggered", "Sync triggered successfully", map[string]interface{}{
 			"user_id": user.ID.String(),
 		})
+	} else if resourceState == "sync" {
+		// "sync" is just Google testing if our endpoint works - no action needed
+		logger.Webhook("webhook_sync_ack", "Received sync acknowledgment (no action)", map[string]interface{}{
+			"user_id":        user.ID.String(),
+			"resource_state": resourceState,
+		})
 	} else {
-		logger.Webhook("webhook_ignored", "Ignoring webhook with state", map[string]interface{}{
+		logger.Webhook("webhook_ignored", "Ignoring webhook with unknown state", map[string]interface{}{
+			"user_id":        user.ID.String(),
 			"resource_state": resourceState,
 		})
 	}
