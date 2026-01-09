@@ -729,7 +729,90 @@ export default function GalleryPage() {
 
   // Folder view
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex-1">
+          <h1 className="text-2xl font-semibold">คลังรูปภาพ</h1>
+          <p className="text-sm text-muted-foreground">
+            จัดการรูปภาพกิจกรรมทั้งหมด
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {/* Retry Failed Button */}
+          {(stats?.failed_photos || 0) > 0 && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => retryFailedMutation.mutate(undefined)}
+              disabled={retryFailedMutation.isPending}
+              className="text-destructive border-destructive/50 hover:bg-destructive/10"
+            >
+              {retryFailedMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  กำลัง Retry...
+                </>
+              ) : (
+                <>
+                  <RotateCcw className="h-4 w-4 mr-2" />
+                  Retry ({stats?.failed_photos})
+                </>
+              )}
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Key Metrics */}
+      <div className={cn(
+        "grid gap-4",
+        (stats?.failed_photos || 0) > 0
+          ? "grid-cols-2 lg:grid-cols-6"
+          : "grid-cols-2 lg:grid-cols-5"
+      )}>
+        <MetricItem
+          label="โฟลเดอร์"
+          value={sharedFolders.length}
+          icon={<FolderTree className="h-3.5 w-3.5" />}
+          isLoading={foldersLoading}
+        />
+        <MetricItem
+          label="รูปภาพทั้งหมด"
+          value={stats?.total_photos || 0}
+          icon={<Images className="h-3.5 w-3.5" />}
+          isLoading={statsLoading}
+        />
+        <MetricItem
+          label="ประมวลผลแล้ว"
+          value={stats?.processed_photos || 0}
+          icon={<CheckCircle2 className="h-3.5 w-3.5" />}
+          isLoading={statsLoading}
+        />
+        <MetricItem
+          label="รอประมวลผล"
+          value={stats?.pending_photos || 0}
+          icon={<Clock className="h-3.5 w-3.5" />}
+          isLoading={statsLoading}
+        />
+        {(stats?.failed_photos || 0) > 0 && (
+          <MetricItem
+            label="ล้มเหลว"
+            value={stats?.failed_photos || 0}
+            icon={<AlertTriangle className="h-3.5 w-3.5 text-destructive" />}
+            isLoading={statsLoading}
+          />
+        )}
+        <MetricItem
+          label="ใบหน้าที่พบ"
+          value={stats?.total_faces || 0}
+          icon={<Users className="h-3.5 w-3.5" />}
+          isLoading={statsLoading}
+        />
+      </div>
+
+      <Separator />
+
       {/* Breadcrumb & Actions */}
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-1 text-sm min-w-0">
