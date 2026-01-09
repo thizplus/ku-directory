@@ -526,12 +526,18 @@ func (h *SharedFolderHandler) ReconnectFolder(c *fiber.Ctx) error {
 		})
 	}
 
+	// Clear error status after reconnect
+	h.sharedFolderRepo.UpdateSyncStatus(c.Context(), folderID, models.SyncStatusIdle, "")
+
 	// Try to register webhook with new tokens
 	_ = h.sharedFolderService.RegisterWebhook(c.Context(), userCtx.ID, folderID)
 
+	// Trigger sync to verify tokens work and refresh data
+	_ = h.sharedFolderService.TriggerSync(c.Context(), userCtx.ID, folderID, false)
+
 	return c.JSON(fiber.Map{
 		"success": true,
-		"message": "Folder reconnected successfully",
+		"message": "Folder reconnected and sync triggered",
 	})
 }
 
