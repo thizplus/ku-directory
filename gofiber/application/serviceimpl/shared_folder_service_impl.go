@@ -592,7 +592,27 @@ func (s *SharedFolderServiceImpl) TriggerSync(ctx context.Context, userID uuid.U
 }
 
 // createSyncJob creates a new sync job for a folder
+// Returns nil if a job already exists (no error, just skips)
 func (s *SharedFolderServiceImpl) createSyncJob(ctx context.Context, userID uuid.UUID, folderID uuid.UUID) error {
+	// Check if there's already a pending or running job for this folder
+	hasExisting, err := s.syncJobRepo.HasPendingOrRunningJobForFolder(ctx, folderID)
+	if err != nil {
+		logger.SyncError("check_existing_job_failed", "Failed to check for existing job", err, map[string]interface{}{
+			"folder_id": folderID.String(),
+		})
+		// Continue anyway - worst case we create a duplicate
+	}
+	if hasExisting {
+		logger.Sync("sync_job_skipped", "Skipping - job already pending/running for folder", map[string]interface{}{
+			"folder_id": folderID.String(),
+		})
+		// Trigger worker anyway in case existing job is stuck
+		if s.syncWorker != nil {
+			s.syncWorker.TriggerSync()
+		}
+		return nil
+	}
+
 	// Create metadata JSON
 	metadata := worker.SyncJobMetadata{
 		SharedFolderID: folderID,
@@ -745,7 +765,27 @@ func (s *SharedFolderServiceImpl) RegisterWebhook(ctx context.Context, userID uu
 }
 
 // triggerSyncForFolder triggers sync for a specific shared folder
+// Returns nil if a job already exists (no error, just skips to avoid duplicates)
 func (s *SharedFolderServiceImpl) triggerSyncForFolder(ctx context.Context, folder *models.SharedFolder) error {
+	// Check if there's already a pending or running job for this folder
+	hasExisting, err := s.syncJobRepo.HasPendingOrRunningJobForFolder(ctx, folder.ID)
+	if err != nil {
+		logger.SyncError("check_existing_job_failed", "Failed to check for existing job", err, map[string]interface{}{
+			"folder_id": folder.ID.String(),
+		})
+		// Continue anyway - worst case we create a duplicate
+	}
+	if hasExisting {
+		logger.Sync("webhook_sync_job_skipped", "Skipping webhook sync - job already pending/running", map[string]interface{}{
+			"folder_id": folder.ID.String(),
+		})
+		// Trigger worker anyway in case existing job is stuck
+		if s.syncWorker != nil {
+			s.syncWorker.TriggerSync()
+		}
+		return nil
+	}
+
 	// Create sync job using the token owner's ID
 	metadata := worker.SyncJobMetadata{
 		SharedFolderID: folder.ID,

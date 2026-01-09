@@ -73,6 +73,22 @@ func (r *SyncJobRepositoryImpl) GetPendingJobs(ctx context.Context, jobType mode
 	return jobs, err
 }
 
+func (r *SyncJobRepositoryImpl) HasPendingOrRunningJobForFolder(ctx context.Context, folderID uuid.UUID) (bool, error) {
+	var count int64
+	// Check for pending or running jobs that have this folder ID in metadata
+	// metadata is JSON like: {"shared_folder_id":"uuid-here"}
+	err := r.db.WithContext(ctx).Model(&models.SyncJob{}).
+		Where("status IN (?, ?) AND metadata LIKE ?",
+			models.SyncJobStatusPending,
+			models.SyncJobStatusRunning,
+			"%"+folderID.String()+"%").
+		Count(&count).Error
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
 func (r *SyncJobRepositoryImpl) Update(ctx context.Context, id uuid.UUID, job *models.SyncJob) error {
 	return r.db.WithContext(ctx).Where("id = ?", id).Updates(job).Error
 }
