@@ -403,10 +403,34 @@ func (w *SyncWorker) processIncrementalSync(ctx context.Context, job models.Sync
 
 	changes, newPageToken, err := w.driveClient.GetChanges(ctx, srv, folder.PageToken)
 	if err != nil {
-		logger.SyncError("get_changes_failed", "Failed to get changes, falling back to full sync", err, map[string]interface{}{
+		logger.SyncError("get_changes_failed", "Failed to get changes", err, map[string]interface{}{
 			"job_id":    jobID.String(),
 			"folder_id": folder.ID.String(),
 		})
+
+		// Check if it's a token error
+		errStr := err.Error()
+		isTokenError := strings.Contains(errStr, "401") ||
+			strings.Contains(errStr, "Invalid Credentials") ||
+			strings.Contains(errStr, "authError") ||
+			strings.Contains(errStr, "token") ||
+			strings.Contains(errStr, "oauth")
+
+		if isTokenError {
+			// Broadcast token error to all users with access to this folder
+			w.broadcastToFolderUsers(ctx, folder.ID, "folder:token_expired", map[string]interface{}{
+				"folderId":   folder.ID.String(),
+				"folderName": folder.DriveFolderName,
+				"message":    "Google Drive token หมดอายุ กรุณา Reconnect",
+			})
+
+			// Update folder status with error and fail the job
+			w.sharedFolderRepo.UpdateSyncStatus(ctx, folder.ID, models.SyncStatusError, "Google token expired - please reconnect")
+			w.failJob(ctx, jobID, &folder.ID, fmt.Sprintf("Failed to get changes: %v", err))
+			return
+		}
+
+		// For other errors, fall back to full sync
 		w.sharedFolderRepo.Update(ctx, folder.ID, &models.SharedFolder{PageToken: ""})
 		w.processFullSync(ctx, job, folder, srv)
 		return
@@ -682,6 +706,27 @@ func (w *SyncWorker) processFullSync(ctx context.Context, job models.SyncJob, fo
 			"job_id":    jobID.String(),
 			"folder_id": folder.ID.String(),
 		})
+
+		// Check if it's a token error and notify users
+		errStr := err.Error()
+		isTokenError := strings.Contains(errStr, "401") ||
+			strings.Contains(errStr, "Invalid Credentials") ||
+			strings.Contains(errStr, "authError") ||
+			strings.Contains(errStr, "token") ||
+			strings.Contains(errStr, "oauth")
+
+		if isTokenError {
+			// Broadcast token error to all users with access to this folder
+			w.broadcastToFolderUsers(ctx, folder.ID, "folder:token_expired", map[string]interface{}{
+				"folderId":   folder.ID.String(),
+				"folderName": folder.DriveFolderName,
+				"message":    "Google Drive token หมดอายุ กรุณา Reconnect",
+			})
+
+			// Update folder status with error
+			w.sharedFolderRepo.UpdateSyncStatus(ctx, folder.ID, models.SyncStatusError, "Google token expired - please reconnect")
+		}
+
 		w.failJob(ctx, jobID, &folder.ID, fmt.Sprintf("Failed to list files: %v", err))
 		return
 	}
