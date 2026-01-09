@@ -530,9 +530,31 @@ func (w *SyncWorker) processIncrementalSync(ctx context.Context, job models.Sync
 
 		file := change.File
 
-		// Handle folder changes (renamed folders)
+		// Handle folder changes (trashed or renamed folders)
 		if file.MimeType == "application/vnd.google-apps.folder" {
-			// Check if this folder is within our root folder
+			// Check if folder was trashed - delete all photos in this folder
+			if file.Trashed {
+				deletedFromFolder, err := w.photoRepo.DeleteByDriveFolderID(ctx, file.Id)
+				if err == nil && deletedFromFolder > 0 {
+					totalDeleted += int(deletedFromFolder)
+					logger.Sync("folder_trashed", "Deleted photos from trashed folder", map[string]interface{}{
+						"job_id":          jobID.String(),
+						"drive_folder_id": file.Id,
+						"folder_name":     file.Name,
+						"deleted_count":   deletedFromFolder,
+					})
+
+					w.broadcastToFolderUsers(ctx, folder.ID, "photos:deleted", map[string]interface{}{
+						"count":    deletedFromFolder,
+						"reason":   "folder_trashed",
+						"folderId": file.Id,
+					})
+				}
+				totalProcessed++
+				continue
+			}
+
+			// Check if this folder is within our root folder (for rename handling)
 			if w.isWithinRootFolder(ctx, srv, file.Id, folder.DriveFolderID) || file.Id == folder.DriveFolderID {
 				// Get the new folder path
 				newFolderPath, err := w.driveClient.GetFolderPath(ctx, srv, file.Id, folder.DriveFolderID)
