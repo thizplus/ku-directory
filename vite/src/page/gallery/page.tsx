@@ -351,12 +351,59 @@ export default function GalleryPage() {
   const { data: sharedFoldersData, isLoading: foldersLoading } = useSharedFolders(driveStatus?.connected)
   const sharedFolders = sharedFoldersData?.folders || []
 
+  // Compute subfolders first to determine if we should fetch photos
+  // We need to compute this before useFolderPhotos to decide whether to enable it
+  const computedSubfolders = useMemo((): ComputedSubfolder[] => {
+    if (!selectedFolderId) return []
+
+    const folder = sharedFolders.find(f => f.id === selectedFolderId)
+    if (!folder?.children || folder.children.length === 0) return []
+
+    const rootName = folder.drive_folder_name
+    const currentPrefix = currentPath || rootName
+
+    // Group by first segment after current prefix
+    const folderMap = new Map<string, ComputedSubfolder>()
+
+    folder.children.forEach(child => {
+      if (!child.path.startsWith(currentPrefix)) return
+
+      const remaining = child.path.slice(currentPrefix.length)
+      if (!remaining || remaining === "/") return
+
+      const withoutLeadingSlash = remaining.startsWith("/") ? remaining.slice(1) : remaining
+      const firstSegment = withoutLeadingSlash.split("/")[0]
+
+      if (!firstSegment) return
+
+      const fullPath = `${currentPrefix}/${firstSegment}`
+
+      if (folderMap.has(firstSegment)) {
+        const existing = folderMap.get(firstSegment)!
+        existing.photoCount += child.photo_count
+      } else {
+        folderMap.set(firstSegment, {
+          name: firstSegment,
+          fullPath,
+          photoCount: child.photo_count
+        })
+      }
+    })
+
+    return Array.from(folderMap.values()).sort((a, b) => a.name.localeCompare(b.name))
+  }, [selectedFolderId, currentPath, sharedFolders])
+
+  // Only fetch photos when:
+  // 1. We have a selected folder AND
+  // 2. Either we have a currentPath (inside a subfolder) OR there are no subfolders at this level
+  const shouldFetchPhotos = !!selectedFolderId && (!!currentPath || computedSubfolders.length === 0)
+
   const { data: photosData, isLoading: photosLoading } = useFolderPhotos(
     selectedFolderId || "",
     page,
     limit,
     undefined,
-    !!selectedFolderId,
+    shouldFetchPhotos,
     currentPath
   )
   const { data: stats, isLoading: statsLoading } = useFaceStats()
@@ -412,52 +459,8 @@ export default function GalleryPage() {
     setBreadcrumbs(crumbs)
   }, [selectedFolderId, currentPath, sharedFolders])
 
-  // Compute subfolders at current level - handles nested paths correctly
-  const subfolders = useMemo((): ComputedSubfolder[] => {
-    if (!selectedFolderId) return []
-
-    const folder = sharedFolders.find(f => f.id === selectedFolderId)
-    if (!folder?.children || folder.children.length === 0) return []
-
-    const rootName = folder.drive_folder_name
-    const currentPrefix = currentPath || rootName
-
-    // Group by first segment after current prefix
-    const folderMap = new Map<string, ComputedSubfolder>()
-
-    folder.children.forEach(child => {
-      // child.path example: "KU TEST/2568/งานกิจกรรมที่ 1"
-      if (!child.path.startsWith(currentPrefix)) return
-
-      // Get remaining path after current prefix
-      const remaining = child.path.slice(currentPrefix.length)
-      // remaining example: "/2568/งานกิจกรรมที่ 1" or "" if exact match
-
-      if (!remaining || remaining === "/") return // Exact match, no subfolder
-
-      // Remove leading slash and get first segment
-      const withoutLeadingSlash = remaining.startsWith("/") ? remaining.slice(1) : remaining
-      const firstSegment = withoutLeadingSlash.split("/")[0]
-
-      if (!firstSegment) return
-
-      const fullPath = `${currentPrefix}/${firstSegment}`
-
-      // Aggregate photo counts for same subfolder
-      if (folderMap.has(firstSegment)) {
-        const existing = folderMap.get(firstSegment)!
-        existing.photoCount += child.photo_count
-      } else {
-        folderMap.set(firstSegment, {
-          name: firstSegment,
-          fullPath,
-          photoCount: child.photo_count
-        })
-      }
-    })
-
-    return Array.from(folderMap.values()).sort((a, b) => a.name.localeCompare(b.name))
-  }, [selectedFolderId, currentPath, sharedFolders])
+  // Use computed subfolders (calculated earlier for shouldFetchPhotos)
+  const subfolders = computedSubfolders
 
   // Navigation handlers
   const handleFolderSelect = (folderId: string) => {
